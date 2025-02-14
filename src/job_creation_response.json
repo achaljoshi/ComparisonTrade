@@ -1,0 +1,13 @@
+{
+    "baseline": {
+        "env": "PROD",
+        "label": 20250123
+    },
+    "candidate": {
+        "env": "QA",
+        "label": 20250124
+    },
+    "report": {
+        "format": "CSV"
+    }
+}

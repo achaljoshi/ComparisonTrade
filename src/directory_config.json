@@ -1,0 +1,9 @@
+{
+    "input_base_dir_baseline": "/Users/storezadeveloper/Downloads/ComparisonDashboard-main-modified/",
+    "input_base_dir_candidate": "/Users/storezadeveloper/Downloads/ComparisonDashboard-main-modified/",
+    "output_base_dir": "/Users/storezadeveloper/Downloads/ComparisonDashboard-main-modified/",
+    
+    "input_file_baseline": "{input_base_dir_baseline}/prod/20250214/asx_1.xlsx",
+    "input_file_candidate": "{input_base_dir_candidate}/qa/20250214/asx_2.xlsx",
+    "output_file_result": "{output_base_dir}/output/20250214/result.xlsx"
+}

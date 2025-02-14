@@ -1,0 +1,34 @@
+{
+    "identifier": "Transaction_ID",
+    "text_file_delimiter": ",",
+    "rules": [
+        {
+            "type": "tolerance_check",
+            "Rule Number" : "tolerance_check_1",
+            "columns": ["Open", "Close", "High", "Low"],
+            "acceptable": 3,
+            "warning": {"min": 3, "max": 10},
+            "fatal": {"min": 10},
+            "description": "Differences are acceptable if < 3, warnings if 3 < difference < 10, fatal if > 10"
+        },
+        {
+            "type": "trade_price_check",
+            "Rule Number" : "trade_price_check_2",
+            "columns": ["Trade Price"],
+            "fatal_threshold": 0.1,
+            "description": "Trade Price > Original Trade Price + delta is fatal if delta >= 0.1"
+        },
+        {
+            "type": "ignore_differences",
+            "columns": ["Trade Date", "Timestamp"],
+            "description": "Ignoring differences in Trade Date and Time"
+        },
+        {
+            "type": "tolerance_check",
+            "Rule Number" : "tolerance_check_3",
+            "columns": ["Amount"],
+            "acceptable": 0.01,
+            "description": "Differences in Amount are acceptable within a tolerance of ±0.01"
+        }
+    ]
+}

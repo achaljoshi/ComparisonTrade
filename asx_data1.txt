@@ -1,0 +1,11 @@
+Transaction_ID,Customer_Name,Product_Code,Quantity,Unit_Price,Total_Amount,Transaction_Date,Status
+TRX001,John Smith,PRD-123,5,29.99,149.95,2024-03-01,Completed
+TRX002,Mary Johnson,PRD-456,3,45.50,136.50,2024-03-02,Pending
+TRX003,Robert Brown,PRD-789,2,99.99,199.98,2024-03-02,Completed
+TRX004,Lisa Davis,PRD-234,1,149.99,149.99,2024-03-03,Completed
+TRX005,Michael Wilson,PRD-567,4,19.99,79.96,2024-03-03,Cancelled
+TRX006,Sarah Miller,PRD-890,2,89.99,179.98,2024-03-04,Completed
+TRX007,James Anderson,PRD-345,6,15.99,95.94,2024-03-04,Pending
+TRX008,Emily White,PRD-678,3,59.99,179.97,2024-03-05,Completed
+TRX009,David Taylor,PRD-901,1,299.99,299.99,2024-03-05,Completed
+TRX010,Jennifer Lee,PRD-432,4,49.99,199.96,2024-03-06,Pending

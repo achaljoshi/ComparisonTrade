@@ -1,0 +1,43 @@
+------- Windows (Command Prompt) -------
+1. open given project in vs code or any IDE.
+2. create and activate virtual environment by running below command in the terminal-
+	.\myenv\Scripts\Activate.ps1
+	deactivate
+    Remove-Item -Path 'myenv' -Recurse -Force
+    python -m venv myenv
+    .\myenv\Scripts\Activate.ps1
+    echo $env:VIRTUAL_ENV
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass //for windows
+
+3. install dependencies by running below command-
+	pip install -r requirements.txt 
+4. run project by running below command-
+	streamlit run src/app.py
+  
+ 
+
+--------- Linux & macOS ------
+python3 -m venv venv
+source myenv/bin/activate
+pip install -r requirements.txt
+streamlit run src/app.py
+
+
+
+
+For Linux/macOS:
+export DIRECTORY_CONFIG_PATH="/path/to/directory_config.json"
+export JOB_RESPONSE_PATH="/path/to/job_creation_response.json"
+export RULES_CONFIG_PATH="/path/to/rules_config.json"
+
+
+For Windows (Command Prompt):
+set DIRECTORY_CONFIG_PATH=C:\path\to\directory_config.json
+set JOB_RESPONSE_PATH=C:\path\to\job_creation_response.json
+set RULES_CONFIG_PATH=C:\path\to\rules_config.json
+
+
+For Windows (PowerShell):
+$env:DIRECTORY_CONFIG_PATH="C:\path\to\directory_config.json"
+$env:JOB_RESPONSE_PATH="C:\path\to\job_creation_response.json"
+$env:RULES_CONFIG_PATH="C:\path\to\rules_config.json"
