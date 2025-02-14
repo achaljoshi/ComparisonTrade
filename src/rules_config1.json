@@ -1,0 +1,35 @@
+{
+    "identifier": "Stock Code",
+    "text_file_delimiter": ",",
+    "rules": [
+        {
+            "type": "tolerance_check",
+            "Rule Number": "tolerance_check_1",
+            "columns": ["Open", "Close", "Volume"],
+            "acceptable": 3,
+            "warning": {"min": 3, "max": 10},
+            "fatal": {"min": 10},
+            "description": "Differences are acceptable if < 3, warnings if 3 < difference < 10, fatal if > 10"
+        },
+        {
+            "type": "Market_Cap_check",
+            "Rule Number": "Market_Cap_check2",
+            "Category": "Warning",
+            "columns": ["Market Cap"],
+            "threshold": 0.1,
+            "description": "Market Cap > Original Market Cap + delta is fatal if delta >= 0.1"
+        },
+        {
+            "type": "ignore_differences",
+            "columns": ["Trade Date", "Timestamp"],
+            "description": "Ignoring differences in Trade Date and Time"
+        },
+        {
+            "type": "tolerance_check",
+            "Rule Number" : "tolerance_check_3",
+            "columns": ["Amount"],
+            "acceptable": 0.01,
+            "description": "Differences in Amount are acceptable within a tolerance of ±0.01"
+        }
+    ]
+}

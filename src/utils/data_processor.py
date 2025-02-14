@@ -51,7 +51,7 @@ class DataProcessor:
 
     
     def compare_files(self, df_baseline=None, df_candidate=None, file_type="Excel"):
-        """Compare Baseline and Candidate files, using uploaded DataFrames if provided."""
+        """Compare Baseline and Candidate files using dynamically defined rules from rules_config.json."""
 
         # ✅ **Use Uploaded DataFrames If Available**
         if df_baseline is not None and df_candidate is not None:
@@ -59,11 +59,8 @@ class DataProcessor:
             df_prod, df_qa = df_baseline, df_candidate  # Assign DataFrames directly
         else:
             print("⚠️ No uploaded DataFrames found. Using preconfigured file paths.")
-
-            # ✅ **Fallback to Preconfigured File Paths If No Uploaded DataFrames**
             input_file_baseline, input_file_candidate, output_file_result = self.resolve_file_paths()
 
-            # **Check if preconfigured files exist before loading**
             if not os.path.exists(input_file_baseline) or not os.path.exists(input_file_candidate):
                 raise FileNotFoundError(f"❌ Baseline or Candidate file not found.\n"
                                         f"Baseline: {input_file_baseline}\n"
@@ -99,8 +96,12 @@ class DataProcessor:
 
         discrepancies = []
 
-        # ✅ **Compare Each Column for Differences Based on Rules**
+        # ✅ **Apply All Rules Dynamically**
         for rule in self.rules_config["rules"]:
+            rule_type = rule["type"]  # ✅ Rule type is dynamic
+            rule_number = rule.get("Rule Number", "N/A")
+            rule_description = rule["description"]
+
             for col in rule["columns"]:
                 col_baseline = f"{col}_baseline"
                 col_candidate = f"{col}_candidate"
@@ -113,28 +114,45 @@ class DataProcessor:
                     # ✅ **Compute Absolute Difference**
                     df_merged["diff"] = abs(df_merged[col_baseline] - df_merged[col_candidate])
 
-                    classification = "Acceptable"
-                    if rule["type"] == "tolerance_check":
-                        acceptable = rule.get("acceptable", 0)
-                        warning_range = rule.get("warning", {})
-                        fatal_threshold = rule.get("fatal", {}).get("min", float("inf"))
+                    # ✅ **Determine Classification Based on Rule Type**
+                    classification = "Uncategorized"  # Default category if no match
 
-                        # ✅ **Determine Classification Based on Rules**
-                        max_diff = df_merged["diff"].max() if "diff" in df_merged.columns else 0
-                        if max_diff > fatal_threshold:
-                            classification = "FATAL"
-                        elif max_diff > warning_range.get("max", fatal_threshold):
-                            classification = "WARNING"
-                        elif max_diff > acceptable:
-                            classification = "ERROR"
+                    # ✅ **For Threshold-Based Rules, Use `Category` from `rules_config.json`**
+                    if "threshold" in rule:
+                        classification = rule.get("Category", "FATAL")  # ✅ Uses category from JSON
+                        threshold = rule["threshold"]
+                        df_merged["rule_violation"] = df_merged[col_candidate] - df_merged[col_baseline]
+                        if (df_merged["rule_violation"] >= threshold).any():
+                            classification = rule["Category"]  # ✅ Strictly follows JSON
+
+                    # ✅ **For Tolerance-Based Rules, Dynamically Assign Category Correctly**
+                    elif "acceptable" in rule or "warning" in rule or "fatal" in rule:
+                        acceptable = rule.get("acceptable", 0)
+                        warning_min = rule.get("warning", {}).get("min", acceptable)
+                        warning_max = rule.get("warning", {}).get("max", float("inf"))
+                        fatal_min = rule.get("fatal", {}).get("min", float("inf"))
+
+                        df_merged["classification"] = "ACCEPTABLE"  # Default to ACCEPTABLE
+
+                        # ✅ **Assigning Correct Categories**
+                        df_merged.loc[df_merged["diff"] >= fatal_min, "classification"] = "FATAL"
+                        df_merged.loc[(df_merged["diff"] >= warning_min) & (df_merged["diff"] < warning_max), "classification"] = "WARNING"
+
+                        classification = df_merged["classification"].values[0]  # Ensure correct assignment
+
+                        # Debugging Output
+                        print(f"🔍 Processing Rule: {rule_type} for Column: {col}")
+                        print(f"➡️ Acceptable: {acceptable}, Warning: {warning_min}-{warning_max}, Fatal: {fatal_min}")
+                        print(f"➡️ Max Diff: {df_merged['diff'].max()}, Assigned Category: {classification}")
 
                     # ✅ **Collect Discrepancies**
                     for _, row in df_merged[df_merged["diff"] > 0].iterrows():
                         discrepancies.append({
                             "Identifier": row[key_column],
-                            "Category": classification,
-                            "Rule Number": rule.get("Rule Number", "N/A"),
-                            "Description": rule["description"],
+                            "Rule Type": rule_type,  # ✅ Now includes dynamic rule type
+                            "Category": row["classification"],  # ✅ Uses correct category assignment
+                            "Rule Number": rule_number,
+                            "Description": rule_description,
                             "Baseline Field Value": row[col_baseline],
                             "Candidate Field Value": row[col_candidate]
                         })
@@ -153,4 +171,3 @@ class DataProcessor:
         discrepancies_df.to_excel(output_file_result, index=False)
 
         return discrepancies_df
-
