@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 import os
 from utils.data_processor import DataProcessor
 
@@ -91,18 +92,38 @@ elif st.session_state["screen"] == "file_selection":
     # File upload options based on selected file type
     file_type = st.session_state["file_type"]
     
+    uploaded_file_baseline = None
+    uploaded_file_candidate = None
+    df_baseline = None
+    df_candidate = None
+
     if file_type == "Excel (.xlsx)":
         uploaded_file_baseline = st.file_uploader("Upload Baseline File (.xlsx)", type=["xlsx"])
         uploaded_file_candidate = st.file_uploader("Upload Candidate File (.xlsx)", type=["xlsx"])
+        if uploaded_file_baseline and uploaded_file_candidate:
+            df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
+            df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
+
     elif file_type == "Datadog Logs (.log)":
         uploaded_file_baseline = st.file_uploader("Upload Baseline Log File (.log)", type=["log"])
         uploaded_file_candidate = st.file_uploader("Upload Candidate Log File (.log)", type=["log"])
+        if uploaded_file_baseline and uploaded_file_candidate:
+            df_baseline = pd.read_csv(uploaded_file_baseline, delimiter="\n", header=None, names=["log_text"])
+            df_candidate = pd.read_csv(uploaded_file_candidate, delimiter="\n", header=None, names=["log_text"])
+
     elif file_type == "Text Files (.txt)":
         uploaded_file_baseline = st.file_uploader("Upload Baseline Text File (.txt)", type=["txt"])
         uploaded_file_candidate = st.file_uploader("Upload Candidate Text File (.txt)", type=["txt"])
+        delimiter = processor.rules_config.get("text_file_delimiter", ",")  # Get delimiter from rules_config
+        if uploaded_file_baseline and uploaded_file_candidate:
+            df_baseline = pd.read_csv(uploaded_file_baseline, delimiter=delimiter)
+            df_candidate = pd.read_csv(uploaded_file_candidate, delimiter=delimiter)
 
     if st.button("Run Comparison"):
-        results = processor.compare_files(uploaded_file_baseline, uploaded_file_candidate, file_type)
-        st.success("Comparison Completed! Discrepancy report generated.")
-        st.dataframe(results)
-
+        if df_baseline is not None and df_candidate is not None:
+            st.write("✅ Uploaded files are successfully read as DataFrames.")
+            results = processor.compare_files(df_baseline, df_candidate, file_type)
+            st.success("Comparison Completed! Discrepancy report generated.")
+            st.dataframe(results)
+        else:
+            st.error("❌ Please upload both baseline and candidate files before running the comparison.")

@@ -1,5 +1,5 @@
 {
-    "identifier": "Transaction_ID",
+    "identifier": "Stock Code",
     "text_file_delimiter": ",",
     "rules": [
         {
