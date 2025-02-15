@@ -1,7 +1,22 @@
 {
-    "identifier": "Stock Code",
+    "identifier": "StockCode",
     "text_file_delimiter": ",",
     "rules": [
+        {
+            "type": "Trade_Date_check",
+            "Rule Number" : "Trade_Date_check_3",
+            "columns": ["TradeDate"],
+            "Category": "Warning",
+            "days": 0,
+            "description": "acceptable if trade date is having only 1 day difference"
+        },
+        {
+            "type": "String_Check",
+            "Rule Number" : "String_check_4",
+            "columns": ["CompanyName", "Sector"],
+            "Category": "Warning",
+            "description": "acceptable if trade date is having only 1 day difference"
+        },
         {
             "type": "tolerance_check",
             "Rule Number": "tolerance_check_1",
@@ -14,8 +29,8 @@
         {
             "type": "Market_Cap_check",
             "Rule Number": "Market_Cap_check2",
-            "Category": "Warning",
-            "columns": ["Market Cap"],
+            "Category": "ABC",
+            "columns": ["MarketCap"],
             "threshold": 0.1,
             "description": "Market Cap > Original Market Cap + delta is fatal if delta >= 0.1"
         },
@@ -23,20 +38,6 @@
             "type": "ignore_differences",
             "columns": ["Timestamp"],
             "description": "Ignoring differences in Time"
-        },
-        {
-            "type": "Trade_Date_check",
-            "Rule Number" : "Trade_Date_check_3",
-            "columns": ["Trade Date"],
-            "acceptable": 1,
-            "description": "acceptable if trade date is having only 1 day difference"
-        },
-        {
-            "type": "String_Check",
-            "Rule Number" : "String_check_4",
-            "columns": ["Company Name", "Sector"],
-            "Category": "Fatal",
-            "description": "acceptable if trade date is having only 1 day difference"
         }
     ]
 }

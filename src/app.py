@@ -1,3 +1,4 @@
+import shutil
 import streamlit as st
 import pandas as pd
 import os
@@ -11,6 +12,17 @@ rules_config_path = os.getenv("RULES_CONFIG_PATH")
 # Change save directory to a writable location
 save_directory = os.path.expanduser("~/config/")  # Use home directory for write access
 
+# Get the absolute path of the current script's directory
+base_dir = os.path.dirname(os.path.abspath(__file__))
+cache_dir = os.path.join(base_dir, "utils", "__pycache__")
+
+# Check if the directory exists before attempting to delete it
+if os.path.exists(cache_dir):
+    shutil.rmtree(cache_dir)
+    print(f"Deleted {cache_dir}")
+else:
+    print(f"No cache directory found at {cache_dir}")
+    
 # Ensure the directory exists
 if not os.path.exists(save_directory):
     os.makedirs(save_directory, exist_ok=True)
@@ -27,6 +39,7 @@ if not rules_config_path:
 
 # **Step 1: Upload Config Files if Missing**
 if "screen" not in st.session_state:
+    st.cache_data.clear()
     st.session_state["screen"] = "upload_config"
 
 if st.session_state["screen"] == "upload_config":
