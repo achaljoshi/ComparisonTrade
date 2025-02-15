@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Streamlit App",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "${workspaceFolder}/src/app.py"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            // "env": {
+            //     "DIRECTORY_CONFIG_PATH": "${workspaceFolder}/src/directory_config.json",
+            //     "JOB_RESPONSE_PATH": "${workspaceFolder}/src/job_creation_response.json",
+            //     "RULES_CONFIG_PATH": "${workspaceFolder}/src/rules_config.json"
+            // }
+        }
+    ]
+}

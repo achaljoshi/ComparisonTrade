@@ -1,6 +1,8 @@
 import json  # ✅ Fix: Ensure JSON module is imported
 import os
 import pandas as pd
+from datetime import datetime, timedelta
+
 
 class DataProcessor:
     def __init__(self, directory_config_path=None, job_response_path=None, rules_config_path=None):
@@ -48,8 +50,11 @@ class DataProcessor:
         )
 
         return input_file_baseline, input_file_candidate, output_file_result
+  
+
 
     
+
     def compare_files(self, df_baseline=None, df_candidate=None, file_type="Excel"):
         """Compare Baseline and Candidate files using dynamically defined rules from rules_config.json."""
 
@@ -96,7 +101,7 @@ class DataProcessor:
 
         discrepancies = []
 
-        # ✅ **Apply All Rules Dynamically**
+        # ✅ **Separate Logic for Threshold-Based and Tolerance-Based Rules**
         for rule in self.rules_config["rules"]:
             rule_type = rule["type"]  # ✅ Rule type is dynamic
             rule_number = rule.get("Rule Number", "N/A")
@@ -114,18 +119,30 @@ class DataProcessor:
                     # ✅ **Compute Absolute Difference**
                     df_merged["diff"] = abs(df_merged[col_baseline] - df_merged[col_candidate])
 
-                    # ✅ **Determine Classification Based on Rule Type**
-                    classification = "Uncategorized"  # Default category if no match
-
-                    # ✅ **For Threshold-Based Rules, Use `Category` from `rules_config.json`**
+                    # ✅ **Threshold-Based Rules Logic**
                     if "threshold" in rule:
-                        classification = rule.get("Category", "FATAL")  # ✅ Uses category from JSON
+                        category = rule.get("Category", "FATAL")  # ✅ Strictly use category from rules_config.json
                         threshold = rule["threshold"]
-                        df_merged["rule_violation"] = df_merged[col_candidate] - df_merged[col_baseline]
-                        if (df_merged["rule_violation"] >= threshold).any():
-                            classification = rule["Category"]  # ✅ Strictly follows JSON
 
-                    # ✅ **For Tolerance-Based Rules, Dynamically Assign Category Correctly**
+                        # **Fix: Use `abs(rule_violation)` to detect violations correctly**
+                        df_merged["rule_violation"] = df_merged[col_candidate] - df_merged[col_baseline]
+                        df_merged["rule_violation_abs"] = abs(df_merged["rule_violation"])  # ✅ Fix here
+                        df_merged.loc[df_merged["rule_violation_abs"] >= threshold, "classification"] = category
+
+                        # ✅ **Collect Discrepancies for Threshold-Based Rules**
+                        for _, row in df_merged[df_merged["rule_violation_abs"] >= threshold].iterrows():
+                            discrepancies.append({
+                                key_column: row[key_column],
+                                "Rule Type": rule_type,
+                                "Category": row["classification"],  # ✅ Uses predefined category
+                                "Rule Number": rule_number,
+                                "Description": rule_description,
+                                "Baseline Field Value": row[col_baseline],
+                                "Candidate Field Value": row[col_candidate],
+                                "Column Name": col  # ✅ Include actual column name in discrepancies
+                            })
+
+                    # ✅ **Tolerance-Based Rules Logic**
                     elif "acceptable" in rule or "warning" in rule or "fatal" in rule:
                         acceptable = rule.get("acceptable", 0)
                         warning_min = rule.get("warning", {}).get("min", acceptable)
@@ -134,28 +151,25 @@ class DataProcessor:
 
                         df_merged["classification"] = "ACCEPTABLE"  # Default to ACCEPTABLE
 
-                        # ✅ **Assigning Correct Categories**
+                        # ✅ **Fix Condition Logic for `WARNING` and `FATAL`**
                         df_merged.loc[df_merged["diff"] >= fatal_min, "classification"] = "FATAL"
-                        df_merged.loc[(df_merged["diff"] >= warning_min) & (df_merged["diff"] < warning_max), "classification"] = "WARNING"
+                        df_merged.loc[(df_merged["diff"] >= warning_min) & (df_merged["diff"] < fatal_min), "classification"] = "WARNING"
 
-                        classification = df_merged["classification"].values[0]  # Ensure correct assignment
+                        # ✅ **Ensure Correct Category Assignment**
+                        classification = df_merged["classification"].iloc[0] if not df_merged.empty else "Uncategorized"
 
-                        # Debugging Output
-                        print(f"🔍 Processing Rule: {rule_type} for Column: {col}")
-                        print(f"➡️ Acceptable: {acceptable}, Warning: {warning_min}-{warning_max}, Fatal: {fatal_min}")
-                        print(f"➡️ Max Diff: {df_merged['diff'].max()}, Assigned Category: {classification}")
-
-                    # ✅ **Collect Discrepancies**
-                    for _, row in df_merged[df_merged["diff"] > 0].iterrows():
-                        discrepancies.append({
-                            "Identifier": row[key_column],
-                            "Rule Type": rule_type,  # ✅ Now includes dynamic rule type
-                            "Category": row["classification"],  # ✅ Uses correct category assignment
-                            "Rule Number": rule_number,
-                            "Description": rule_description,
-                            "Baseline Field Value": row[col_baseline],
-                            "Candidate Field Value": row[col_candidate]
-                        })
+                        # ✅ **Collect Discrepancies for Tolerance-Based Rules**
+                        for _, row in df_merged[df_merged["diff"] > 0].iterrows():
+                            discrepancies.append({
+                                key_column: row[key_column],
+                                "Rule Type": rule_type,
+                                "Category": row["classification"],  # ✅ Uses correct category assignment
+                                "Rule Number": rule_number,
+                                "Description": rule_description,
+                                "Baseline Field Value": row[col_baseline],
+                                "Candidate Field Value": row[col_candidate],
+                                "Column Name": col  # ✅ Include actual column name in discrepancies
+                            })
 
         # ✅ **Convert to DataFrame**
         discrepancies_df = pd.DataFrame(discrepancies)
