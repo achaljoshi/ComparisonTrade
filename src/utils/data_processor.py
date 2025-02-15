@@ -264,11 +264,22 @@ class DataProcessor:
         # Convert all dictionary-like values to strings to avoid PyArrow serialization issues
         discrepancies_df = pd.DataFrame(discrepancies)
 
-        for col in ["Baseline Value", "Candidate Value"]:
-            if col in discrepancies_df.columns:
-                discrepancies_df[col] = discrepancies_df[col].apply(lambda x: json.dumps(x) if isinstance(x, dict) else x)
+        # for col in ["Baseline Value", "Candidate Value"]:
+        #     if col in discrepancies_df.columns:
+        #         discrepancies_df[col] = discrepancies_df[col].apply(lambda x: json.dumps(x) if isinstance(x, dict) else x)
 
-        # Ensure all columns are properly formatted for Arrow serialization
+        # # Ensure all columns are properly formatted for Arrow serialization
+        # discrepancies_df = discrepancies_df.astype(str)
+
+        # return discrepancies_df
+
+        
+
+        # ✅ Ensure 'Category' Column Exists (Fixes Missing 'Warning' Error)
+        if "Category" not in discrepancies_df.columns:
+            discrepancies_df["Category"] = "UNKNOWN"  # Assign a default category if missing
+
+        # ✅ Convert all columns to strings to avoid PyArrow serialization issues
         discrepancies_df = discrepancies_df.astype(str)
 
         return discrepancies_df

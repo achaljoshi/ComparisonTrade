@@ -1,46 +1,42 @@
-import shutil
 import streamlit as st
-import pandas as pd
 import os
+import pandas as pd
+import plotly.express as px
 from utils.data_processor import DataProcessor
 
-# Use system environment variables if available, otherwise set to None
-directory_config_path = os.getenv("DIRECTORY_CONFIG_PATH")
-job_response_path = os.getenv("JOB_RESPONSE_PATH")
-rules_config_path = os.getenv("RULES_CONFIG_PATH")
+# **✅ Ensure `st.set_page_config()` is first**
+st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
 
-# Change save directory to a writable location
-save_directory = os.path.expanduser("~/config/")  # Use home directory for write access
+# **🔄 Clear Cache & Restart Button**
+if st.sidebar.button("🔄 Clear Cache & Restart"):
+    st.cache_data.clear()  # Clears cached data
+    st.session_state.clear()  # Resets all session state variables
+    st.rerun()  # ✅ Restart the app
 
-# Get the absolute path of the current script's directory
-base_dir = os.path.dirname(os.path.abspath(__file__))
-cache_dir = os.path.join(base_dir, "utils", "__pycache__")
+# **🛠️ Ensure session state variables persist**
+if "screen" not in st.session_state:
+    st.session_state["screen"] = "upload_config"
 
-# Check if the directory exists before attempting to delete it
-if os.path.exists(cache_dir):
-    shutil.rmtree(cache_dir)
-    print(f"Deleted {cache_dir}")
-else:
-    print(f"No cache directory found at {cache_dir}")
-    
-# Ensure the directory exists
+if "directory_config_path" not in st.session_state:
+    st.session_state["directory_config_path"] = None
+if "job_response_path" not in st.session_state:
+    st.session_state["job_response_path"] = None
+if "rules_config_path" not in st.session_state:
+    st.session_state["rules_config_path"] = None
+
+# **Save directory for uploaded config files**
+save_directory = os.path.expanduser("~/config/")
 if not os.path.exists(save_directory):
     os.makedirs(save_directory, exist_ok=True)
 
-# Check which configuration files are missing
+# **Step 1: Upload Configuration Files**
 missing_files = {}
-
-if not directory_config_path:
+if not st.session_state["directory_config_path"]:
     missing_files["directory_config.json"] = os.path.join(save_directory, "directory_config.json")
-if not job_response_path:
+if not st.session_state["job_response_path"]:
     missing_files["job_creation_response.json"] = os.path.join(save_directory, "job_creation_response.json")
-if not rules_config_path:
+if not st.session_state["rules_config_path"]:
     missing_files["rules_config.json"] = os.path.join(save_directory, "rules_config.json")
-
-# **Step 1: Upload Config Files if Missing**
-if "screen" not in st.session_state:
-    st.cache_data.clear()
-    st.session_state["screen"] = "upload_config"
 
 if st.session_state["screen"] == "upload_config":
     st.title("Upload Configuration Files")
@@ -50,31 +46,47 @@ if st.session_state["screen"] == "upload_config":
 
         uploaded_files = {}
         for file_name, save_path in missing_files.items():
-            uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"])
+            uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=file_name)
             if uploaded_file:
                 with open(save_path, "wb") as f:
                     f.write(uploaded_file.read())
-                uploaded_files[file_name] = save_path  # Store uploaded file paths
+                uploaded_files[file_name] = save_path
+                st.success(f"`{file_name}` uploaded successfully!")
 
-        # **Set paths after upload**
+        # **Store uploaded file paths in session state**
         if len(uploaded_files) == len(missing_files):
-            directory_config_path = uploaded_files.get("directory_config.json", directory_config_path)
-            job_response_path = uploaded_files.get("job_creation_response.json", job_response_path)
-            rules_config_path = uploaded_files.get("rules_config.json", rules_config_path)
-
-            # Store paths in session state to prevent loss on rerun
-            st.session_state["directory_config_path"] = directory_config_path
-            st.session_state["job_response_path"] = job_response_path
-            st.session_state["rules_config_path"] = rules_config_path
+            st.session_state["directory_config_path"] = uploaded_files.get("directory_config.json", st.session_state["directory_config_path"])
+            st.session_state["job_response_path"] = uploaded_files.get("job_creation_response.json", st.session_state["job_response_path"])
+            st.session_state["rules_config_path"] = uploaded_files.get("rules_config.json", st.session_state["rules_config_path"])
 
             st.success("Configuration files uploaded successfully! Click 'Next' to proceed.")
+
             if st.button("Next"):
                 st.session_state["screen"] = "file_type_selection"
-                st.rerun()
+                st.rerun()  # ✅ Refresh screen to move to the next step
+
+    else:
+        st.success("All configuration files are already uploaded. Click 'Next' to proceed.")
+        if st.button("Next"):
+            st.session_state["screen"] = "file_type_selection"
+            st.rerun()
+
+    st.stop()  # ✅ Prevent the app from moving forward until all files are uploaded
+
+# **Debugging: Print session state to check stored values**
+st.sidebar.write("📌 Debug Info:", st.session_state)
 
 # **Step 2: Select File Type**
-elif st.session_state["screen"] == "file_type_selection":
+if st.session_state["screen"] == "file_type_selection":
     st.title("Select File Type for Comparison")
+
+    # Ensure `rules_config.json` exists before proceeding
+    if not st.session_state["rules_config_path"] or not os.path.exists(st.session_state["rules_config_path"]):
+        st.error("Rules configuration file not found! Please go back and upload it.")
+        if st.button("Go Back"):
+            st.session_state["screen"] = "upload_config"
+            st.rerun()
+        st.stop()
 
     file_type = st.radio(
         "Choose the type of files you want to compare:",
@@ -86,57 +98,73 @@ elif st.session_state["screen"] == "file_type_selection":
         st.session_state["screen"] = "file_selection"
         st.rerun()
 
-# **Step 3: Show File Upload Based on Selected File Type**
-elif st.session_state["screen"] == "file_selection":
-    st.title(f"Upload {st.session_state['file_type']} Files for Comparison")
+# **Ensure rules config is loaded**
+rules_config_path = st.session_state["rules_config_path"]
+if rules_config_path and os.path.exists(rules_config_path):
+    rules_config = pd.read_json(rules_config_path)
+else:
+    st.error("Rules configuration file not found!")
+    st.stop()
 
-    # **Retrieve config paths from session state**
-    directory_config_path = st.session_state.get("directory_config_path")
-    job_response_path = st.session_state.get("job_response_path")
-    rules_config_path = st.session_state.get("rules_config_path")
+# **Sidebar Filters**
+st.sidebar.header("Filter Rules")
+selected_filters = {}
+for rule in rules_config.get("rules", []):
+    if "acceptable" in rule:
+        selected_filters[rule["Rule Number"]] = st.sidebar.number_input(
+            f"{rule['Rule Number']} - {', '.join(rule['columns'])}", value=rule["acceptable"]
+        )
 
-    if not directory_config_path or not job_response_path or not rules_config_path:
-        st.error("Configuration paths are missing! Please restart and upload the required files.")
-        st.stop()
+# **Step 3: Upload Files for Comparison**
+st.header("Upload Files for Comparison")
+uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt"])
+uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt"])
 
-    # **Initialize DataProcessor**
-    processor = DataProcessor(directory_config_path, job_response_path, rules_config_path)
-
-    # File upload options based on selected file type
-    file_type = st.session_state["file_type"]
-    
-    uploaded_file_baseline = None
-    uploaded_file_candidate = None
-    df_baseline = None
-    df_candidate = None
-
-    if file_type == "Excel (.xlsx)":
-        uploaded_file_baseline = st.file_uploader("Upload Baseline File (.xlsx)", type=["xlsx"])
-        uploaded_file_candidate = st.file_uploader("Upload Candidate File (.xlsx)", type=["xlsx"])
-        if uploaded_file_baseline and uploaded_file_candidate:
+# **Step 4: Run Comparison**
+if st.button("Run Comparison"):
+    if uploaded_file_baseline and uploaded_file_candidate:
+        try:
+            processor = DataProcessor(
+                st.session_state["directory_config_path"],
+                st.session_state["job_response_path"],
+                st.session_state["rules_config_path"]
+            )
             df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
             df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
 
-    elif file_type == "Datadog Logs (.log)":
-        uploaded_file_baseline = st.file_uploader("Upload Baseline Log File (.log)", type=["log"])
-        uploaded_file_candidate = st.file_uploader("Upload Candidate Log File (.log)", type=["log"])
-        if uploaded_file_baseline and uploaded_file_candidate:
-            df_baseline = pd.read_csv(uploaded_file_baseline, delimiter="\n", header=None, names=["log_text"])
-            df_candidate = pd.read_csv(uploaded_file_candidate, delimiter="\n", header=None, names=["log_text"])
-
-    elif file_type == "Text Files (.txt)":
-        uploaded_file_baseline = st.file_uploader("Upload Baseline Text File (.txt)", type=["txt"])
-        uploaded_file_candidate = st.file_uploader("Upload Candidate Text File (.txt)", type=["txt"])
-        delimiter = processor.rules_config.get("text_file_delimiter", ",")  # Get delimiter from rules_config
-        if uploaded_file_baseline and uploaded_file_candidate:
-            df_baseline = pd.read_csv(uploaded_file_baseline, delimiter=delimiter)
-            df_candidate = pd.read_csv(uploaded_file_candidate, delimiter=delimiter)
-
-    if st.button("Run Comparison"):
-        if df_baseline is not None and df_candidate is not None:
+            # ✅ Run Comparison
             st.write("✅ Uploaded files are successfully read as DataFrames.")
-            results = processor.compare_files(df_baseline, df_candidate, file_type)
+            results = processor.compare_files(df_baseline, df_candidate, st.session_state["file_type"])
             st.success("Comparison Completed! Discrepancy report generated.")
+
+            # ✅ Debugging - Check Columns
+            st.write("Results Columns:", results.columns.tolist())
+
+            # ✅ Ensure 'Category' Column Exists
+            if "Category" not in results.columns:
+                st.error("Comparison failed: 'Category' column missing in results.")
+                st.stop()
+
+            # **🎯 Display KPIs**
+            st.header("Key Performance Indicators")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Discrepancies", len(results))
+            col2.metric("Warning Threshold", (results["Category"] == "WARNING").sum())
+            col3.metric("Fatal Discrepancies", (results["Category"] == "FATAL").sum())
+
+            # **📊 Visualization**
+            st.header("Discrepancy Analysis")
+            fig = px.bar(results, x="Column Name", y="Category", barmode="group", title="Discrepancies by Column")
+            st.plotly_chart(fig, use_container_width=True)
+
+            pie_chart = px.pie(results, names="Category", title="Discrepancy Distribution")
+            st.plotly_chart(pie_chart)
+
+            # **📑 Display Discrepancy Data**
+            st.header("Discrepancy Details")
             st.dataframe(results)
-        else:
-            st.error("❌ Please upload both baseline and candidate files before running the comparison.")
+
+        except Exception as e:
+            st.error(f"Error processing files: {str(e)}")
+    else:
+        st.error("Please upload both baseline and candidate files.")
