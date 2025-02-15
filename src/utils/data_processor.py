@@ -175,18 +175,16 @@ class DataProcessor:
                                 "Baseline Field Value": row[col_baseline],
                                 "Candidate Field Value": row[col_candidate]
                             })
-                    elif rule_type == "Trade_Date_check":
+                    
+                    elif any("date" in col.lower() for col in rule["columns"]) or any(pd.api.types.is_datetime64_any_dtype(df_merged[col_baseline]) for col in rule["columns"]):
                         category = rule.get("Category", "None")
-                        # ✅ Convert TradeDate columns to date format
+
+                        # ✅ Convert date/datetime columns to date format
                         df_merged[col_baseline] = pd.to_datetime(df_merged[col_baseline], errors="coerce").dt.date
                         df_merged[col_candidate] = pd.to_datetime(df_merged[col_candidate], errors="coerce").dt.date
 
                         # ✅ Calculate difference in days and explicitly convert to integer
-                        df_merged["Trade_Date_Diff"] = (
-                            pd.to_datetime(df_merged[col_candidate]) - pd.to_datetime(df_merged[col_baseline])
-                        ).dt.days
-
-                        # ✅ Explicitly convert to integer (avoiding timedelta issues)
+                        df_merged["Trade_Date_Diff"] = (pd.to_datetime(df_merged[col_candidate]) - pd.to_datetime(df_merged[col_baseline])).dt.days
                         df_merged["Trade_Date_Diff"] = df_merged["Trade_Date_Diff"].fillna(0).astype(int)
 
                         # ✅ Assign the integer value to rule_violation to avoid type mismatch
@@ -214,20 +212,16 @@ class DataProcessor:
                                 "Baseline Field Value": row[col_baseline] if pd.notna(row[col_baseline]) else "MISSING",
                                 "Candidate Field Value": row[col_candidate] if pd.notna(row[col_candidate]) else "MISSING"
                             })
-
-
-                    # **String Check Rule Fix**
-                    elif rule_type == "String_Check":
+                    elif rule_type == "ignore_differences":
+                        continue
+                    else:
                         category = rule.get("Category", "None")
                         df_merged[col_baseline] = df_merged[col_baseline].astype(str).str.strip()
                         df_merged[col_candidate] = df_merged[col_candidate].astype(str).str.strip()
 
-                        # ✅ Detect mismatches
                         df_merged["String_Mismatch"] = df_merged[col_baseline] != df_merged[col_candidate]
-                        
-                        # ✅ Debugging - Print Rows with Mismatches
                         string_violations = df_merged[df_merged["String_Mismatch"]]
-                        print(f"🔍 Found {len(string_violations)} mismatches in {col}")
+                        print(f"Found {len(string_violations)} mismatches in {col}")
 
                         for _, row in string_violations.iterrows():
                             discrepancies.append({
@@ -240,46 +234,6 @@ class DataProcessor:
                                 "Baseline Field Value": row[col_baseline] if row[col_baseline] else "MISSING",
                                 "Candidate Field Value": row[col_candidate] if row[col_candidate] else "MISSING"
                             })
-
-
-
-
-                    
-                    # # ✅ Category-Based Rules (TradeDate & String Check)
-                    # elif "Category" in rule:
-                    #     category_label = rule.get("Category", "INFO")
-
-                    #     if "Date" in col:
-                    #         # ✅ Handle Date Differences
-                    #         df_merged[col_baseline] = pd.to_datetime(df_merged[col_baseline], errors="coerce").fillna(pd.Timestamp.min)
-                    #         df_merged[col_candidate] = pd.to_datetime(df_merged[col_candidate], errors="coerce").fillna(pd.Timestamp.min)
-
-                    #         df_merged["rule_violation"] = abs((df_merged[col_candidate] - df_merged[col_baseline]).dt.days) > rule.get("acceptable", 1)
-                    #     else:
-                    #         # ✅ Handle String Differences
-                    #         df_merged[col_baseline] = df_merged[col_baseline].astype(str).str.strip()
-                    #         df_merged[col_candidate] = df_merged[col_candidate].astype(str).str.strip()
-                    #         df_merged["rule_violation"] = ~df_merged[col_baseline].eq(df_merged[col_candidate])
-
-                    #     df_merged.loc[df_merged["rule_violation"], "classification"] = category_label
-
-                    #     # ✅ Convert NaN in `rule_violation` to 0
-                    #     df_merged["rule_violation"] = df_merged["rule_violation"].fillna(0)
-
-                    #     # ✅ Collect Discrepancies for this Rule
-                    #     for _, row in df_merged.loc[df_merged["rule_violation"] > 0].iterrows():
-                    #         rule_discrepancies.append({
-                    #             "Identifier": row[key_column],
-                    #             "Column Name": col,
-                    #             "Rule Type": rule_type,
-                    #             "Category": row.get("classification", "INFO"),
-                    #             "Rule Number": rule_number,
-                    #             "Description": rule_description,
-                    #             "Baseline Field Value": row[col_baseline],
-                    #             "Candidate Field Value": row[col_candidate]
-                    #         })
-
-                    #     discrepancies.extend(rule_discrepancies)  # ✅ Append rule-specific discrepancies to the final list
 
         # ✅ Include Extra Rows from Baseline
         for _, row in extra_rows_baseline.iterrows():

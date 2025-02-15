@@ -3,7 +3,7 @@
     "text_file_delimiter": ",",
     "rules": [
         {
-            "type": "Trade_Date_check",
+            "type": "Date_check",
             "Rule Number" : "Trade_Date_check_3",
             "columns": ["TradeDate"],
             "Category": "Warning",
@@ -20,7 +20,7 @@
         {
             "type": "tolerance_check",
             "Rule Number": "tolerance_check_1",
-            "columns": ["Open", "Close", "Volume"],
+            "columns": ["Open","Close", "Volume"],
             "acceptable": 3,
             "warning": {"min": 3, "max": 10},
             "fatal": {"min": 10},
@@ -36,7 +36,7 @@
         },
         {
             "type": "ignore_differences",
-            "columns": ["Timestamp"],
+            "columns": ["ABC"],
             "description": "Ignoring differences in Time"
         }
     ]
