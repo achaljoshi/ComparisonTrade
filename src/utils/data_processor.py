@@ -52,9 +52,6 @@ class DataProcessor:
         return input_file_baseline, input_file_candidate, output_file_result
   
 
-
-    
-
     def compare_files(self, df_baseline=None, df_candidate=None, file_type="Excel"):
         """Compare Baseline and Candidate files using dynamically defined rules from rules_config.json."""
 
@@ -99,6 +96,10 @@ class DataProcessor:
         # ✅ **Merge Data Based on Identifier**
         df_merged = df_prod.merge(df_qa, on=key_column, suffixes=("_baseline", "_candidate"), how="inner")
 
+        # ✅ **Find Extra Rows in Candidate and Baseline**
+        extra_rows_candidate = df_qa[~df_qa[key_column].isin(df_prod[key_column])]
+        extra_rows_baseline = df_prod[~df_prod[key_column].isin(df_qa[key_column])]
+
         discrepancies = []
 
         # ✅ **Separate Logic for Threshold-Based and Tolerance-Based Rules**
@@ -132,14 +133,14 @@ class DataProcessor:
                         # ✅ **Collect Discrepancies for Threshold-Based Rules**
                         for _, row in df_merged[df_merged["rule_violation_abs"] >= threshold].iterrows():
                             discrepancies.append({
-                                key_column: row[key_column],
+                                "Identifier": row[key_column],
+                                "Column Name": col,  # ✅ Include actual column name in discrepancies
                                 "Rule Type": rule_type,
                                 "Category": row["classification"],  # ✅ Uses predefined category
                                 "Rule Number": rule_number,
                                 "Description": rule_description,
                                 "Baseline Field Value": row[col_baseline],
-                                "Candidate Field Value": row[col_candidate],
-                                "Column Name": col  # ✅ Include actual column name in discrepancies
+                                "Candidate Field Value": row[col_candidate]
                             })
 
                     # ✅ **Tolerance-Based Rules Logic**
@@ -161,15 +162,41 @@ class DataProcessor:
                         # ✅ **Collect Discrepancies for Tolerance-Based Rules**
                         for _, row in df_merged[df_merged["diff"] > 0].iterrows():
                             discrepancies.append({
-                                key_column: row[key_column],
+                                "Identifier": row[key_column],
+                                "Column Name": col,  # ✅ Include actual column name in discrepancies
                                 "Rule Type": rule_type,
                                 "Category": row["classification"],  # ✅ Uses correct category assignment
                                 "Rule Number": rule_number,
                                 "Description": rule_description,
                                 "Baseline Field Value": row[col_baseline],
-                                "Candidate Field Value": row[col_candidate],
-                                "Column Name": col  # ✅ Include actual column name in discrepancies
+                                "Candidate Field Value": row[col_candidate]
                             })
+
+        # ✅ **Collect Extra Rows from Candidate**
+        for _, row in extra_rows_candidate.iterrows():
+            discrepancies.append({
+                "Identifier": row[key_column],
+                "Column Name": "ALL",  # ✅ Applies to all columns since the row is missing in baseline
+                "Rule Type": "Extra Row in Candidate",
+                "Category": "INFO",
+                "Rule Number": "Extra_Row_Candidate",
+                "Description": "Row exists in candidate but is missing in baseline.",
+                "Baseline Field Value": "MISSING",
+                "Candidate Field Value": row.to_dict()  # ✅ Stores full row details
+            })
+
+        # ✅ **Collect Extra Rows from Baseline**
+        for _, row in extra_rows_baseline.iterrows():
+            discrepancies.append({
+                "Identifier": row[key_column],
+                "Column Name": "ALL",  # ✅ Applies to all columns since the row is missing in candidate
+                "Rule Type": "Extra Row in Baseline",
+                "Category": "INFO",
+                "Rule Number": "Extra_Row_Baseline",
+                "Description": "Row exists in baseline but is missing in candidate.",
+                "Baseline Field Value": row.to_dict(),  # ✅ Stores full row details
+                "Candidate Field Value": "MISSING"
+            })
 
         # ✅ **Convert to DataFrame**
         discrepancies_df = pd.DataFrame(discrepancies)
