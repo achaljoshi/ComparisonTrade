@@ -1,5 +1,5 @@
 {
-    "identifier": "Stock Code",
+    "identifier": "StockCode",
     "text_file_delimiter": ",",
     "rules": [
         {
@@ -14,13 +14,13 @@
         {
             "type": "trade_price_check",
             "Rule Number" : "trade_price_check_2",
-            "columns": ["Trade Price"],
+            "columns": ["TradePrice"],
             "fatal_threshold": 0.1,
             "description": "Trade Price > Original Trade Price + delta is fatal if delta >= 0.1"
         },
         {
             "type": "ignore_differences",
-            "columns": ["Trade Date", "Timestamp"],
+            "columns": ["TradeDate", "Timestamp"],
             "description": "Ignoring differences in Trade Date and Time"
         },
         {

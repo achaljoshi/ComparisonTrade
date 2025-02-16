@@ -97,74 +97,69 @@ if st.session_state["screen"] == "file_type_selection":
         st.session_state["file_type"] = file_type
         st.session_state["screen"] = "file_selection"
         st.rerun()
-
-# **Ensure rules config is loaded**
-rules_config_path = st.session_state["rules_config_path"]
-if rules_config_path and os.path.exists(rules_config_path):
-    rules_config = pd.read_json(rules_config_path)
-else:
-    st.error("Rules configuration file not found!")
     st.stop()
 
-# **Sidebar Filters**
-st.sidebar.header("Filter Rules")
-selected_filters = {}
-for rule in rules_config.get("rules", []):
-    if "acceptable" in rule:
-        selected_filters[rule["Rule Number"]] = st.sidebar.number_input(
-            f"{rule['Rule Number']} - {', '.join(rule['columns'])}", value=rule["acceptable"]
-        )
+# **Step 3: Upload Files for Comparison (Only Visible If on This Step)**
+elif st.session_state["screen"] == "file_selection":
+    st.title("Upload Files for Comparison")
 
-# **Step 3: Upload Files for Comparison**
-st.header("Upload Files for Comparison")
-uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt"])
-uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt"])
-
-# **Step 4: Run Comparison**
-if st.button("Run Comparison"):
-    if uploaded_file_baseline and uploaded_file_candidate:
-        try:
-            processor = DataProcessor(
-                st.session_state["directory_config_path"],
-                st.session_state["job_response_path"],
-                st.session_state["rules_config_path"]
-            )
-            df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
-            df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
-
-            # ✅ Run Comparison
-            st.write("✅ Uploaded files are successfully read as DataFrames.")
-            results = processor.compare_files(df_baseline, df_candidate, st.session_state["file_type"])
-            st.success("Comparison Completed! Discrepancy report generated.")
-
-            # ✅ Debugging - Check Columns
-            st.write("Results Columns:", results.columns.tolist())
-
-            # ✅ Ensure 'Category' Column Exists
-            if "Category" not in results.columns:
-                st.error("Comparison failed: 'Category' column missing in results.")
-                st.stop()
-
-            # **🎯 Display KPIs**
-            st.header("Key Performance Indicators")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Discrepancies", len(results))
-            col2.metric("Warning Threshold", (results["Category"] == "WARNING").sum())
-            col3.metric("Fatal Discrepancies", (results["Category"] == "FATAL").sum())
-
-            # **📊 Visualization**
-            st.header("Discrepancy Analysis")
-            fig = px.bar(results, x="Column Name", y="Category", barmode="group", title="Discrepancies by Column")
-            st.plotly_chart(fig, use_container_width=True)
-
-            pie_chart = px.pie(results, names="Category", title="Discrepancy Distribution")
-            st.plotly_chart(pie_chart)
-
-            # **📑 Display Discrepancy Data**
-            st.header("Discrepancy Details")
-            st.dataframe(results)
-
-        except Exception as e:
-            st.error(f"Error processing files: {str(e)}")
+    # **✅ Load Rules Config (Only Needed in This Step)**
+    rules_config_path = st.session_state["rules_config_path"]
+    if rules_config_path and os.path.exists(rules_config_path):
+        rules_config = pd.read_json(rules_config_path)
     else:
-        st.error("Please upload both baseline and candidate files.")
+        st.error("Rules configuration file not found!")
+        st.stop()
+
+    # **✅ Sidebar Filters**
+    st.sidebar.header("Filter Rules")
+    selected_filters = {}
+    for rule in rules_config.get("rules", []):
+        if "acceptable" in rule:
+            selected_filters[rule["Rule Number"]] = st.sidebar.number_input(
+                f"{rule['Rule Number']} - {', '.join(rule['columns'])}", value=rule["acceptable"]
+            )
+
+    # **✅ File Upload Section**
+    uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt"])
+    uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt"])
+
+    if st.button("Run Comparison"):
+        if uploaded_file_baseline and uploaded_file_candidate:
+            try:
+                processor = DataProcessor(
+                    st.session_state["directory_config_path"],
+                    st.session_state["job_response_path"],
+                    st.session_state["rules_config_path"]
+                )
+                df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
+                df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
+
+                # ✅ Run Comparison
+                st.write("✅ Uploaded files are successfully read as DataFrames.")
+                results = processor.compare_files(df_baseline, df_candidate, st.session_state["file_type"])
+                st.success("Comparison Completed! Discrepancy report generated.")
+
+                # **🎯 Display KPIs**
+                st.header("Key Performance Indicators")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Discrepancies", len(results))
+                col2.metric("Warning Threshold", (results["Category"] == "WARNING").sum())
+                col3.metric("Fatal Discrepancies", (results["Category"] == "FATAL").sum())
+
+                # **📊 Visualization**
+                st.header("Discrepancy Analysis")
+                fig = px.bar(results, x="Column Name", y="Category", barmode="group", title="Discrepancies by Column")
+                st.plotly_chart(fig, use_container_width=True)
+
+                pie_chart = px.pie(results, names="Category", title="Discrepancy Distribution")
+                st.plotly_chart(pie_chart)
+
+                # **📑 Display Discrepancy Data**
+                st.header("Discrepancy Details")
+                st.dataframe(results)
+
+            except Exception as e:
+                st.error(f"Error processing files: {str(e)}")
+        else:
+            st.error("Please upload both baseline and candidate files.")
