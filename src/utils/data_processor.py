@@ -124,10 +124,6 @@ class DataProcessor:
                 col_candidate = f"{col}_candidate"
 
                 if col_baseline in df_merged.columns and col_candidate in df_merged.columns:
-                    # ✅ Convert to Numeric if Necessary ----- Unnecessary code
-                    # df_merged[col_baseline] = pd.to_numeric(df_merged[col_baseline], errors="coerce")
-                    # df_merged[col_candidate] = pd.to_numeric(df_merged[col_candidate], errors="coerce")
-
                     # ✅ Ensure `rule_violation` Column Exists & Fill NaN
                     df_merged["rule_violation"] = 0  # Initialize as 0
                     df_merged["classification"] = "ACCEPTABLE"  # Default Category
@@ -146,7 +142,7 @@ class DataProcessor:
                         # ✅ **Collect Discrepancies for Tolerance-Based Rules**
                         for _, row in df_merged[df_merged["rule_violation"] > 0].iterrows():
                             discrepancies.append({
-                                "Identifier": row[key_column],
+                                key_column: row[key_column],
                                 "Column Name": col,  # ✅ Include actual column name in discrepancies
                                 "Rule Type": rule_type,
                                 "Category": row["classification"],  # ✅ Uses correct category assignment
@@ -166,7 +162,7 @@ class DataProcessor:
                         # ✅ **Collect Discrepancies for Threshold-Based Rules**
                         for _, row in df_merged[df_merged["rule_violation"] >= threshold].iterrows():
                             discrepancies.append({
-                                "Identifier": row[key_column],
+                                key_column: row[key_column],
                                 "Column Name": col,  # ✅ Include actual column name in discrepancies
                                 "Rule Type": rule_type,
                                 "Category": row["classification"],  # ✅ Uses predefined category
@@ -203,7 +199,7 @@ class DataProcessor:
                         # ✅ Collect discrepancies
                         for _, row in trade_date_violations.iterrows():
                             discrepancies.append({
-                                "Identifier": row[key_column],
+                                key_column: row[key_column],
                                 "Column Name": col,
                                 "Rule Type": rule_type,
                                 "Category": category,
@@ -225,7 +221,7 @@ class DataProcessor:
 
                         for _, row in string_violations.iterrows():
                             discrepancies.append({
-                                "Identifier": row[key_column],
+                                key_column: row[key_column],
                                 "Column Name": col,
                                 "Rule Type": rule_type,
                                 "Category": category,
@@ -238,7 +234,7 @@ class DataProcessor:
         # ✅ Include Extra Rows from Baseline
         for _, row in extra_rows_baseline.iterrows():
             discrepancies.append({
-                "Identifier": row[key_column],
+                key_column: row[key_column],
                 "Column Name": "ALL",
                 "Rule Type": "Missing in Candidate",
                 "Category": "INFO",
@@ -251,7 +247,7 @@ class DataProcessor:
         # ✅ Include Extra Rows from Candidate
         for _, row in extra_rows_candidate.iterrows():
             discrepancies.append({
-                "Identifier": row[key_column],
+                key_column: row[key_column],
                 "Column Name": "ALL",
                 "Rule Type": "Missing in Baseline",
                 "Category": "INFO",
@@ -263,17 +259,6 @@ class DataProcessor:
 
         # Convert all dictionary-like values to strings to avoid PyArrow serialization issues
         discrepancies_df = pd.DataFrame(discrepancies)
-
-        # for col in ["Baseline Value", "Candidate Value"]:
-        #     if col in discrepancies_df.columns:
-        #         discrepancies_df[col] = discrepancies_df[col].apply(lambda x: json.dumps(x) if isinstance(x, dict) else x)
-
-        # # Ensure all columns are properly formatted for Arrow serialization
-        # discrepancies_df = discrepancies_df.astype(str)
-
-        # return discrepancies_df
-
-        
 
         # ✅ Ensure 'Category' Column Exists (Fixes Missing 'Warning' Error)
         if "Category" not in discrepancies_df.columns:

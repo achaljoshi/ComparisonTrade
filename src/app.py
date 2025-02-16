@@ -2,7 +2,22 @@ import streamlit as st
 import os
 import pandas as pd
 import plotly.express as px
+import json
+from io import BytesIO
 from utils.data_processor import DataProcessor
+import plotly.colors
+import shutil
+
+
+
+# Get the absolute path of the current script's directory
+base_dir = os.path.dirname(os.path.abspath(__file__))
+cache_dir = os.path.join(base_dir, "utils", "__pycache__")
+
+# Check if the directory exists before attempting to delete it
+if os.path.exists(cache_dir):
+    shutil.rmtree(cache_dir)
+    print(f"Deleted {cache_dir}")
 
 # **✅ Ensure `st.set_page_config()` is first**
 st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
@@ -38,7 +53,10 @@ if not st.session_state["job_response_path"]:
 if not st.session_state["rules_config_path"]:
     missing_files["rules_config.json"] = os.path.join(save_directory, "rules_config.json")
 if "selected_filters" not in st.session_state:
-    st.session_state["selected_filters"] = {}
+    st.session_state["selected_filters"] = {}  # ✅ Store dynamically created filters
+if "filtered_results" not in st.session_state:
+    st.session_state["filtered_results"] = pd.DataFrame()
+
 
 if st.session_state["screen"] == "upload_config":
     st.title("Upload Configuration Files")
@@ -105,13 +123,27 @@ if st.session_state["screen"] == "file_type_selection":
 elif st.session_state.get("screen") == "file_selection":
     st.title("Upload Files for Comparison")
 
-    # ✅ Load Rules Config
+    # ✅ Load the rules_config file
     rules_config_path = st.session_state["rules_config_path"]
     if rules_config_path and os.path.exists(rules_config_path):
         rules_config = pd.read_json(rules_config_path)
     else:
-        st.error("Rules configuration file not found!")
-        st.stop()
+        rules_config = {"rules": []}
+
+    # **Load Job Response Config**
+    job_response_path = st.session_state["job_response_path"]
+    export_format = "CSV"  # Default file format
+
+    if job_response_path and os.path.exists(job_response_path):
+        try:
+            with open(job_response_path, "r") as f:
+                job_response = json.load(f)
+                export_format = job_response.get("report", {}).get("format", "CSV").upper()
+        except Exception as e:
+            st.error(f"Error loading job response file: {str(e)}")
+            job_response = None
+    else:
+        job_response = None
 
     # ✅ Sidebar: Dynamic Filters for Each Rule
     st.sidebar.header("🔍 Filter Rules")
@@ -158,45 +190,123 @@ elif st.session_state.get("screen") == "file_selection":
 
                 # ✅ Store results in session state
                 st.session_state["results"] = results
+                st.session_state["filtered_results"] = results  # ✅ Initial filtered results
 
             except Exception as e:
                 st.error(f"Error processing files: {str(e)}")
 
 # ✅ Get results (if available)
 results = st.session_state.get("results", pd.DataFrame())
+filtered_results = st.session_state.get("filtered_results", pd.DataFrame())  # ✅ Ensure not None
 
-# **🎯 Display KPIs**
-if not results.empty:
-    st.header("Key Performance Indicators")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Discrepancies", len(results))
+# **📤 Export Button**
+if not filtered_results.empty and job_response:
+    # ✅ Generate Filename Using Job Response Data
+    baseline_env = job_response["baseline"]["env"]
+    candidate_env = job_response["candidate"]["env"]
+    baseline_label = job_response["baseline"]["label"]
+    candidate_label = job_response["candidate"]["label"]
 
-    warning_count = (results["Category"] == "Warning").sum()
-    fatal_count = (results["Category"] == "FATAL").sum()
+    filename = f"discrepancy_report_{baseline_env}_{candidate_env}_{baseline_label}_{candidate_label}"
 
-    col2.metric("Warning Threshold", warning_count)
-    col3.metric("Fatal Discrepancies", fatal_count)
+    # ✅ Export Data Based on Format
+    export_data = None
+    mime_type = "text/plain"
+
+    if export_format == "CSV":
+        export_data = filtered_results.to_csv(index=False).encode("utf-8")
+        filename += ".csv"
+        mime_type = "text/csv"
+
+    elif export_format == "EXCEL":
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            filtered_results.to_excel(writer, index=False, sheet_name="Discrepancies")
+        export_data = output.getvalue()
+        filename += ".xlsx"
+        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    elif export_format == "JSON":
+        export_data = filtered_results.to_json(orient="records", indent=4).encode("utf-8")
+        filename += ".json"
+        mime_type = "application/json"
+
+    elif export_format == "TEXT":
+        export_data = filtered_results.to_string(index=False).encode("utf-8")
+        filename += ".txt"
+        mime_type = "text/plain"
+
+    if export_data:
+        st.download_button(
+            label="📥 Download Report",
+            data=export_data,
+            file_name=filename,
+            mime=mime_type
+        )
+    else:
+        st.warning("Unsupported export format. Defaulting to CSV.")
+
+# ✅ Display KPIs
+if not filtered_results.empty:
+
+    st.header("📊 Key Performance Indicators")
+
+    # ✅ Ensure consistent capitalization in Category column
+    filtered_results["Category"] = filtered_results["Category"].str.upper()
+
+    # ✅ Count each unique category dynamically
+    category_counts = filtered_results["Category"].value_counts().to_dict()
 
 
-    # ✅ **Dynamic Bar Chart Using Selected Column**
-    st.header(f"Discrepancy Analysis")
+    # ✅ Identify Missing Rows
+    missing_baseline_count = (filtered_results["Rule Type"] == "Missing in Baseline").sum()
+    missing_candidate_count = (filtered_results["Rule Type"] == "Missing in Candidate").sum()
 
+    # ✅ Total metrics to display
+    total_metrics = len(category_counts) + 3  # Dynamic categories + threshold + missing rows
+
+    # ✅ Create correct number of columns
+    kpi_columns = st.columns(min(total_metrics, 4))  # Limit to 4 columns for layout readability
+
+    # ✅ Display each category dynamically
+    i = 0
+    kpi_columns[i % len(kpi_columns)].metric("🔍 Total Discrepancies", len(filtered_results))
+    i += 1
+    for category, count in category_counts.items():
+        kpi_columns[i % len(kpi_columns)].metric(f"{category}", count)
+        i += 1
+
+    kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Baseline", missing_baseline_count)
+    i += 1
+    kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Candidate", missing_candidate_count)
+
+    # ✅ Extract unique categories dynamically
+    unique_categories = filtered_results["Category"].unique()
+    # ✅ Generate distinct colors dynamically using Plotly's color palette
+    color_palette = plotly.colors.qualitative.Set1  # Choose a color set
+    color_map = {category: color_palette[i % len(color_palette)] for i, category in enumerate(unique_categories)}
+    # ✅ Count discrepancies per column and category
+    discrepancy_counts = filtered_results.groupby(["Column Name", "Category"]).size().reset_index(name="Count")
+    # ✅ Bar Chart: Count of Discrepancies by Column
+    st.header("📊 Discrepancy Analysis")
     fig = px.bar(
-        results,
+        discrepancy_counts,
         x="Column Name",
-        y="Category",
+        y="Count",
         color="Category",
+        title="Discrepancies by Column",
         barmode="group",
-        title="Discrepancies by Column"
+        color_discrete_map=color_map  # ✅ Now dynamically generated
     )
     st.plotly_chart(fig, use_container_width=True)
 
+
     # ✅ **Pie Chart: Category Distribution**
     st.header("Discrepancy Distribution")
-    pie_chart = px.pie(results, names="Category", title="Proportion of Discrepancy Types", hole=0.4)
+    pie_chart = px.pie(filtered_results, names="Category", title="Proportion of Discrepancy Types", hole=0.4)
     st.plotly_chart(pie_chart, use_container_width=True)
 
     # ✅ **Filtered Data Table Based on Selected Column**
     st.header("Discrepancy Details")
-    st.dataframe(results)
+    st.dataframe(filtered_results)
 
