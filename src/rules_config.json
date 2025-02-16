@@ -3,32 +3,47 @@
     "text_file_delimiter": ",",
     "rules": [
         {
+            "type": "Date_check",
+            "Rule Number" : "Trade_Date_check_3",
+            "columns": ["TradeDate"],
+            "Category": "Warning",
+            "days": 1,
+            "description": "acceptable if trade date is having only 1 day difference"
+        },
+        {
+            "type": "String_Check",
+            "Rule Number" : "String_check_4",
+            "columns": ["CompanyName", "Sector"],
+            "Category": "Joshi",
+            "description": "acceptable if trade date is having only 1 day difference"
+        },
+        {
             "type": "tolerance_check",
-            "Rule Number" : "tolerance_check_1",
-            "columns": ["Open", "Close", "High", "Low"],
+            "Rule Number": "tolerance_check_1",
+            "columns": ["Open","Close"],
             "acceptable": 3,
-            "warning": {"min": 3, "max": 10},
+            "warning": {"min": 4, "max": 10},
             "fatal": {"min": 10},
             "description": "Differences are acceptable if < 3, warnings if 3 < difference < 10, fatal if > 10"
         },
         {
-            "type": "trade_price_check",
-            "Rule Number" : "trade_price_check_2",
-            "columns": ["TradePrice"],
-            "fatal_threshold": 0.1,
-            "description": "Trade Price > Original Trade Price + delta is fatal if delta >= 0.1"
+            "type": "Market_Cap_check",
+            "Rule Number": "Market_Cap_check2",
+            "Category": "ABC",
+            "columns": ["MarketCap"],
+            "threshold": 0.1,
+            "description": "Market Cap > Original Market Cap + delta is fatal if delta >= 0.1"
         },
         {
             "type": "ignore_differences",
-            "columns": ["TradeDate", "Timestamp"],
-            "description": "Ignoring differences in Trade Date and Time"
+            "columns": ["ABC"],
+            "description": "Ignoring differences in Time"
         },
         {
-            "type": "tolerance_check",
-            "Rule Number" : "tolerance_check_3",
-            "columns": ["Amount"],
-            "acceptable": 0.01,
-            "description": "Differences in Amount are acceptable within a tolerance of ±0.01"
+            "type": "ABC_check",
+            "columns": ["Volume"],
+            "acceptable": 100,
+            "description": "Ignoring differences in Time"
         }
     ]
 }
