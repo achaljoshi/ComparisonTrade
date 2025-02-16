@@ -140,26 +140,58 @@ elif st.session_state["screen"] == "file_selection":
                 results = processor.compare_files(df_baseline, df_candidate, st.session_state["file_type"])
                 st.success("Comparison Completed! Discrepancy report generated.")
 
+                # **🚨 Debugging - Ensure All Expected Columns Exist**
+                expected_columns = [
+                    "Identifier", "Column Name", "Rule Type", "Category", "Rule Number", "Description",
+                    "Baseline Field Value", "Candidate Field Value"
+                ]
+                missing_columns = [col for col in expected_columns if col not in results.columns]
+                if missing_columns:
+                    st.error(f"Missing columns in results: {missing_columns}")
+                    st.stop()
+
                 # **🎯 Display KPIs**
                 st.header("Key Performance Indicators")
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Total Discrepancies", len(results))
-                col2.metric("Warning Threshold", (results["Category"] == "WARNING").sum())
-                col3.metric("Fatal Discrepancies", (results["Category"] == "FATAL").sum())
 
-                # **📊 Visualization**
+                # ✅ Ensure "Category" Column Exists and Summarize Warnings/Fatals
+                if "Category" in results.columns:
+                    warning_count = (results["Category"] == "Warning").sum()
+                    fatal_count = (results["Category"] == "FATAL").sum()
+                else:
+                    warning_count, fatal_count = 0, 0
+
+                col2.metric("Warning Threshold", warning_count)
+                col3.metric("Fatal Discrepancies", fatal_count)
+
+                # **📊 Visualization: Bar Chart for Discrepancy Types**
                 st.header("Discrepancy Analysis")
-                fig = px.bar(results, x="Column Name", y="Category", barmode="group", title="Discrepancies by Column")
+                fig = px.bar(
+                    results,
+                    x="Column Name",
+                    y="Category",
+                    color="Category",
+                    barmode="group",
+                    title="Discrepancies by Column"
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
-                pie_chart = px.pie(results, names="Category", title="Discrepancy Distribution")
+                # **📊 Visualization: Pie Chart for Category Distribution**
+                pie_chart = px.pie(
+                    results,
+                    names="Category",
+                    title="Discrepancy Distribution",
+                    hole=0.4  # Makes it a donut chart
+                )
                 st.plotly_chart(pie_chart)
 
-                # **📑 Display Discrepancy Data**
+                # **📑 Display Discrepancy Data with Enhanced Formatting**
                 st.header("Discrepancy Details")
-                st.dataframe(results)
+                st.dataframe(results.style.set_properties(**{"text-align": "left"}))
 
             except Exception as e:
                 st.error(f"Error processing files: {str(e)}")
         else:
             st.error("Please upload both baseline and candidate files.")
+
