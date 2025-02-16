@@ -37,6 +37,8 @@ if not st.session_state["job_response_path"]:
     missing_files["job_creation_response.json"] = os.path.join(save_directory, "job_creation_response.json")
 if not st.session_state["rules_config_path"]:
     missing_files["rules_config.json"] = os.path.join(save_directory, "rules_config.json")
+if "selected_filters" not in st.session_state:
+    st.session_state["selected_filters"] = {}
 
 if st.session_state["screen"] == "upload_config":
     st.title("Upload Configuration Files")
@@ -74,7 +76,7 @@ if st.session_state["screen"] == "upload_config":
     st.stop()  # ✅ Prevent the app from moving forward until all files are uploaded
 
 # **Debugging: Print session state to check stored values**
-st.sidebar.write("📌 Debug Info:", st.session_state)
+# st.sidebar.write("📌 Debug Info:", st.session_state)
 
 # **Step 2: Select File Type**
 if st.session_state["screen"] == "file_type_selection":
@@ -100,10 +102,10 @@ if st.session_state["screen"] == "file_type_selection":
     st.stop()
 
 # **Step 3: Upload Files for Comparison (Only Visible If on This Step)**
-elif st.session_state["screen"] == "file_selection":
+elif st.session_state.get("screen") == "file_selection":
     st.title("Upload Files for Comparison")
 
-    # **✅ Load Rules Config (Only Needed in This Step)**
+    # ✅ Load Rules Config
     rules_config_path = st.session_state["rules_config_path"]
     if rules_config_path and os.path.exists(rules_config_path):
         rules_config = pd.read_json(rules_config_path)
@@ -111,16 +113,30 @@ elif st.session_state["screen"] == "file_selection":
         st.error("Rules configuration file not found!")
         st.stop()
 
-    # **✅ Sidebar Filters**
-    st.sidebar.header("Filter Rules")
-    selected_filters = {}
-    for rule in rules_config.get("rules", []):
-        if "acceptable" in rule:
-            selected_filters[rule["Rule Number"]] = st.sidebar.number_input(
-                f"{rule['Rule Number']} - {', '.join(rule['columns'])}", value=rule["acceptable"]
-            )
+    # ✅ Sidebar: Dynamic Filters for Each Rule
+    st.sidebar.header("🔍 Filter Rules")
+    selected_filters = st.session_state["selected_filters"]
 
-    # **✅ File Upload Section**
+    for rule in rules_config.get("rules", []):
+        rule_number = rule.get("Rule Number", "Unknown Rule")
+        rule_type = rule.get("type", "Unknown Type")
+        rule_columns = ", ".join(rule.get("columns", []))
+
+        st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
+        st.sidebar.write(f"📝 Columns: {rule_columns}")
+
+        # ✅ Create input fields dynamically for all numeric parameters
+        for key, value in rule.items():
+            if isinstance(value, (int, float)):  # Detect numeric values dynamically
+                selected_filters.setdefault(rule_number, {})  # Initialize if not exists
+                selected_filters[rule_number][key] = st.sidebar.number_input(
+                    f"{key} for {rule_number}", value=value
+                )
+
+    # ✅ Save filters in session state
+    st.session_state["selected_filters"] = selected_filters
+
+    # ✅ File Upload Section
     uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt"])
     uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt"])
 
@@ -140,58 +156,47 @@ elif st.session_state["screen"] == "file_selection":
                 results = processor.compare_files(df_baseline, df_candidate, st.session_state["file_type"])
                 st.success("Comparison Completed! Discrepancy report generated.")
 
-                # **🚨 Debugging - Ensure All Expected Columns Exist**
-                expected_columns = [
-                    "Identifier", "Column Name", "Rule Type", "Category", "Rule Number", "Description",
-                    "Baseline Field Value", "Candidate Field Value"
-                ]
-                missing_columns = [col for col in expected_columns if col not in results.columns]
-                if missing_columns:
-                    st.error(f"Missing columns in results: {missing_columns}")
-                    st.stop()
-
-                # **🎯 Display KPIs**
-                st.header("Key Performance Indicators")
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Discrepancies", len(results))
-
-                # ✅ Ensure "Category" Column Exists and Summarize Warnings/Fatals
-                if "Category" in results.columns:
-                    warning_count = (results["Category"] == "Warning").sum()
-                    fatal_count = (results["Category"] == "FATAL").sum()
-                else:
-                    warning_count, fatal_count = 0, 0
-
-                col2.metric("Warning Threshold", warning_count)
-                col3.metric("Fatal Discrepancies", fatal_count)
-
-                # **📊 Visualization: Bar Chart for Discrepancy Types**
-                st.header("Discrepancy Analysis")
-                fig = px.bar(
-                    results,
-                    x="Column Name",
-                    y="Category",
-                    color="Category",
-                    barmode="group",
-                    title="Discrepancies by Column"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-                # **📊 Visualization: Pie Chart for Category Distribution**
-                pie_chart = px.pie(
-                    results,
-                    names="Category",
-                    title="Discrepancy Distribution",
-                    hole=0.4  # Makes it a donut chart
-                )
-                st.plotly_chart(pie_chart)
-
-                # **📑 Display Discrepancy Data with Enhanced Formatting**
-                st.header("Discrepancy Details")
-                st.dataframe(results.style.set_properties(**{"text-align": "left"}))
+                # ✅ Store results in session state
+                st.session_state["results"] = results
 
             except Exception as e:
                 st.error(f"Error processing files: {str(e)}")
-        else:
-            st.error("Please upload both baseline and candidate files.")
+
+# ✅ Get results (if available)
+results = st.session_state.get("results", pd.DataFrame())
+
+# **🎯 Display KPIs**
+if not results.empty:
+    st.header("Key Performance Indicators")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Discrepancies", len(results))
+
+    warning_count = (results["Category"] == "Warning").sum()
+    fatal_count = (results["Category"] == "FATAL").sum()
+
+    col2.metric("Warning Threshold", warning_count)
+    col3.metric("Fatal Discrepancies", fatal_count)
+
+
+    # ✅ **Dynamic Bar Chart Using Selected Column**
+    st.header(f"Discrepancy Analysis")
+
+    fig = px.bar(
+        results,
+        x="Column Name",
+        y="Category",
+        color="Category",
+        barmode="group",
+        title="Discrepancies by Column"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ✅ **Pie Chart: Category Distribution**
+    st.header("Discrepancy Distribution")
+    pie_chart = px.pie(results, names="Category", title="Proportion of Discrepancy Types", hole=0.4)
+    st.plotly_chart(pie_chart, use_container_width=True)
+
+    # ✅ **Filtered Data Table Based on Selected Column**
+    st.header("Discrepancy Details")
+    st.dataframe(results)
 
