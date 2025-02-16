@@ -7,6 +7,7 @@ from io import BytesIO
 from utils.data_processor import DataProcessor
 import plotly.colors
 import shutil
+import tempfile
 
 
 
@@ -64,16 +65,27 @@ if st.session_state["screen"] == "upload_config":
 
     uploaded_files = {}
 
+    temp_dir = tempfile.mkdtemp()
+
     for file_name, key in missing_files.items():
         uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=key)
 
         if uploaded_file is not None:
-            save_path = os.path.join("/tmp", file_name)  # ✅ Save to a temporary directory
-            with open(save_path, "wb") as f:
-                f.write(uploaded_file.read())
+            save_path = os.path.join(temp_dir, file_name)  # ✅ Save in a unique temp directory
+            
+            try:
+                # ✅ Ensure safe file writing (avoids permission errors)
+                with open(save_path, "wb") as f:
+                    shutil.copyfileobj(uploaded_file, f)  # ✅ Efficient way to copy file content
+                
+                uploaded_files[key] = save_path  # ✅ Store path in dictionary
+                st.success(f"`{file_name}` uploaded successfully!")
 
-            uploaded_files[key] = save_path  # ✅ Store path in dictionary
-            st.success(f"`{file_name}` uploaded successfully!")
+            except Exception as e:
+                st.error(f"❌ Error saving `{file_name}`: {e}")
+
+    # ✅ Debugging: Display uploaded file paths (for verification)
+    st.write("Uploaded file paths:", uploaded_files)
 
     # ✅ Update session state only if all files are uploaded
     if len(uploaded_files) == len(missing_files):
@@ -88,6 +100,22 @@ if st.session_state["screen"] == "upload_config":
             st.rerun()  # ✅ Refresh UI to move to the next step
 
     st.stop()
+
+# ✅ Cleanup function: Delete temp files & folder
+def cleanup_temp_files():
+    try:
+        for file_path in uploaded_files.values():
+            if os.path.exists(file_path):
+                os.remove(file_path)  # ✅ Delete individual temp files
+        
+        shutil.rmtree(temp_dir)  # ✅ Remove the entire temp directory
+        st.success("Temporary files cleaned up successfully!")
+
+    except Exception as e:
+        st.error(f"❌ Error during cleanup: {e}")
+
+if st.button("🗑️ Cleanup Temporary Files"):
+    cleanup_temp_files()
 
 # ✅ Step 2: Select File Type
 if st.session_state["screen"] == "file_type_selection":
