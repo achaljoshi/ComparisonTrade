@@ -22,7 +22,7 @@
             "Rule Number": "tolerance_check_1",
             "columns": ["Open","Close"],
             "acceptable": 3,
-            "warning": {"min": 4, "max": 10},
+            "warning": {"min": 3, "max": 10},
             "fatal": {"min": 10},
             "description": "Differences are acceptable if < 3, warnings if 3 < difference < 10, fatal if > 10"
         },
@@ -37,12 +37,6 @@
         {
             "type": "ignore_differences",
             "columns": ["ABC"],
-            "description": "Ignoring differences in Time"
-        },
-        {
-            "type": "ABC_check",
-            "columns": ["Volume"],
-            "acceptable": 100,
             "description": "Ignoring differences in Time"
         }
     ]

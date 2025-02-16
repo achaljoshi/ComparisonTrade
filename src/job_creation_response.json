@@ -8,6 +8,6 @@
         "label": 20250124
     },
     "report": {
-        "format": "CSV"
+        "format": "JSON"
     }
 }

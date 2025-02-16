@@ -7,7 +7,7 @@
             "Rule Number" : "Trade_Date_check_3",
             "columns": ["TradeDate"],
             "Category": "Warning",
-            "days": 1,
+            "days": 0,
             "description": "acceptable if trade date is having only 1 day difference"
         },
         {
@@ -22,7 +22,7 @@
             "Rule Number": "tolerance_check_1",
             "columns": ["Open","Close"],
             "acceptable": 3,
-            "warning": {"min": 4, "max": 10},
+            "warning": {"min": 3, "max": 10},
             "fatal": {"min": 10},
             "description": "Differences are acceptable if < 3, warnings if 3 < difference < 10, fatal if > 10"
         },

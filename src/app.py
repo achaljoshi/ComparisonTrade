@@ -22,13 +22,13 @@ if os.path.exists(cache_dir):
 # **✅ Ensure `st.set_page_config()` is first**
 st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
 
-# **🔄 Clear Cache & Restart Button**
-if st.sidebar.button("🔄 Clear Cache & Restart"):
-    st.cache_data.clear()  # Clears cached data
-    st.session_state.clear()  # Resets all session state variables
-    st.rerun()  # ✅ Restart the app
+# ✅ Clear Cache & Restart Button
+if st.sidebar.button("🔄 Clear Cache & Restart", key="restart_button"):
+    st.cache_data.clear()
+    st.session_state.clear()
+    st.rerun()
 
-# **🛠️ Ensure session state variables persist**
+# ✅ Ensure session state variables persist
 if "screen" not in st.session_state:
     st.session_state["screen"] = "upload_config"
 
@@ -38,141 +38,78 @@ if "job_response_path" not in st.session_state:
     st.session_state["job_response_path"] = None
 if "rules_config_path" not in st.session_state:
     st.session_state["rules_config_path"] = None
-
-# **Save directory for uploaded config files**
-save_directory = os.path.expanduser("~/config/")
-if not os.path.exists(save_directory):
-    os.makedirs(save_directory, exist_ok=True)
-
-# **Step 1: Upload Configuration Files**
-missing_files = {}
-if not st.session_state["directory_config_path"]:
-    missing_files["directory_config.json"] = os.path.join(save_directory, "directory_config.json")
-if not st.session_state["job_response_path"]:
-    missing_files["job_creation_response.json"] = os.path.join(save_directory, "job_creation_response.json")
-if not st.session_state["rules_config_path"]:
-    missing_files["rules_config.json"] = os.path.join(save_directory, "rules_config.json")
 if "selected_filters" not in st.session_state:
-    st.session_state["selected_filters"] = {}  # ✅ Store dynamically created filters
+    st.session_state["selected_filters"] = {}
 if "filtered_results" not in st.session_state:
     st.session_state["filtered_results"] = pd.DataFrame()
 
+# ✅ Define required config files before using them
+required_files = {
+    "directory_config.json": "directory_config_path",
+    "job_creation_response.json": "job_response_path",
+    "rules_config.json": "rules_config_path"
+}
 
+# ✅ Step 1: Upload Configuration Files
 if st.session_state["screen"] == "upload_config":
     st.title("Upload Configuration Files")
 
-    if missing_files:
-        st.error(f"The following configuration files are missing: {', '.join(missing_files.keys())}. Please upload them.")
+    missing_files = {}
+    if not st.session_state.get("directory_config_path"):
+        missing_files["directory_config.json"] = "directory_config.json"
+    if not st.session_state.get("job_response_path"):
+        missing_files["job_creation_response.json"] = "job_creation_response.json"
+    if not st.session_state.get("rules_config_path"):
+        missing_files["rules_config.json"] = "rules_config.json"
 
-        uploaded_files = {}
-        for file_name, save_path in missing_files.items():
-            uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=file_name)
-            if uploaded_file:
-                with open(save_path, "wb") as f:
-                    f.write(uploaded_file.read())
-                uploaded_files[file_name] = save_path
-                st.success(f"`{file_name}` uploaded successfully!")
+    uploaded_files = {}
 
-        # **Store uploaded file paths in session state**
-        if len(uploaded_files) == len(missing_files):
-            st.session_state["directory_config_path"] = uploaded_files.get("directory_config.json", st.session_state["directory_config_path"])
-            st.session_state["job_response_path"] = uploaded_files.get("job_creation_response.json", st.session_state["job_response_path"])
-            st.session_state["rules_config_path"] = uploaded_files.get("rules_config.json", st.session_state["rules_config_path"])
+    for file_name, key in missing_files.items():
+        uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=key)
 
-            st.success("Configuration files uploaded successfully! Click 'Next' to proceed.")
+        if uploaded_file is not None:
+            save_path = os.path.join("/tmp", file_name)  # ✅ Save to a temporary directory
+            with open(save_path, "wb") as f:
+                f.write(uploaded_file.read())
 
-            if st.button("Next"):
-                st.session_state["screen"] = "file_type_selection"
-                st.rerun()  # ✅ Refresh screen to move to the next step
+            uploaded_files[key] = save_path  # ✅ Store path in dictionary
+            st.success(f"`{file_name}` uploaded successfully!")
 
-    else:
-        st.success("All configuration files are already uploaded. Click 'Next' to proceed.")
+    # ✅ Update session state only if all files are uploaded
+    if len(uploaded_files) == len(missing_files):
+        st.session_state["directory_config_path"] = uploaded_files.get("directory_config.json", st.session_state.get("directory_config_path"))
+        st.session_state["job_response_path"] = uploaded_files.get("job_creation_response.json", st.session_state.get("job_response_path"))
+        st.session_state["rules_config_path"] = uploaded_files.get("rules_config.json", st.session_state.get("rules_config_path"))
+
+        st.success("✅ Configuration files uploaded successfully! Click 'Next' to proceed.")
+        
         if st.button("Next"):
             st.session_state["screen"] = "file_type_selection"
-            st.rerun()
+            st.rerun()  # ✅ Refresh UI to move to the next step
 
-    st.stop()  # ✅ Prevent the app from moving forward until all files are uploaded
+    st.stop()
 
-# **Debugging: Print session state to check stored values**
-# st.sidebar.write("📌 Debug Info:", st.session_state)
-
-# **Step 2: Select File Type**
+# ✅ Step 2: Select File Type
 if st.session_state["screen"] == "file_type_selection":
     st.title("Select File Type for Comparison")
 
-    # Ensure `rules_config.json` exists before proceeding
-    if not st.session_state["rules_config_path"] or not os.path.exists(st.session_state["rules_config_path"]):
-        st.error("Rules configuration file not found! Please go back and upload it.")
-        if st.button("Go Back"):
-            st.session_state["screen"] = "upload_config"
-            st.rerun()
-        st.stop()
+    file_type = st.radio("Choose the file type:", ["Excel (.xlsx)", "Datadog Logs (.log)", "Text Files (.txt)"])
 
-    file_type = st.radio(
-        "Choose the type of files you want to compare:",
-        ["Excel (.xlsx)", "Datadog Logs (.log)", "Text Files (.txt)"]
-    )
-
-    if st.button("Next"):
+    if st.button("Next", key="next_button_file_type"):
         st.session_state["file_type"] = file_type
         st.session_state["screen"] = "file_selection"
         st.rerun()
+
     st.stop()
 
-# **Step 3: Upload Files for Comparison (Only Visible If on This Step)**
-elif st.session_state.get("screen") == "file_selection":
+# ✅ Step 3: Upload Files for Comparison
+if st.session_state["screen"] == "file_selection":
     st.title("Upload Files for Comparison")
 
-    # ✅ Load the rules_config file
-    rules_config_path = st.session_state["rules_config_path"]
-    if rules_config_path and os.path.exists(rules_config_path):
-        rules_config = pd.read_json(rules_config_path)
-    else:
-        rules_config = {"rules": []}
+    uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt"], key="baseline_file")
+    uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt"], key="candidate_file")
 
-    # **Load Job Response Config**
-    job_response_path = st.session_state["job_response_path"]
-    export_format = "CSV"  # Default file format
-
-    if job_response_path and os.path.exists(job_response_path):
-        try:
-            with open(job_response_path, "r") as f:
-                job_response = json.load(f)
-                export_format = job_response.get("report", {}).get("format", "CSV").upper()
-        except Exception as e:
-            st.error(f"Error loading job response file: {str(e)}")
-            job_response = None
-    else:
-        job_response = None
-
-    # ✅ Sidebar: Dynamic Filters for Each Rule
-    st.sidebar.header("🔍 Filter Rules")
-    selected_filters = st.session_state["selected_filters"]
-
-    for rule in rules_config.get("rules", []):
-        rule_number = rule.get("Rule Number", "Unknown Rule")
-        rule_type = rule.get("type", "Unknown Type")
-        rule_columns = ", ".join(rule.get("columns", []))
-
-        st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
-        st.sidebar.write(f"📝 Columns: {rule_columns}")
-
-        # ✅ Create input fields dynamically for all numeric parameters
-        for key, value in rule.items():
-            if isinstance(value, (int, float)):  # Detect numeric values dynamically
-                selected_filters.setdefault(rule_number, {})  # Initialize if not exists
-                selected_filters[rule_number][key] = st.sidebar.number_input(
-                    f"{key} for {rule_number}", value=value
-                )
-
-    # ✅ Save filters in session state
-    st.session_state["selected_filters"] = selected_filters
-
-    # ✅ File Upload Section
-    uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt"])
-    uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt"])
-
-    if st.button("Run Comparison"):
+    if st.button("Run Comparison", key="run_comparison_button"):
         if uploaded_file_baseline and uploaded_file_candidate:
             try:
                 processor = DataProcessor(
@@ -190,16 +127,99 @@ elif st.session_state.get("screen") == "file_selection":
 
                 # ✅ Store results in session state
                 st.session_state["results"] = results
-                st.session_state["filtered_results"] = results  # ✅ Initial filtered results
+                st.session_state["filtered_results"] = results
+                st.session_state["uploaded_file_baseline"] = uploaded_file_baseline
+                st.session_state["uploaded_file_candidate"] = uploaded_file_candidate
 
             except Exception as e:
                 st.error(f"Error processing files: {str(e)}")
 
-# ✅ Get results (if available)
-results = st.session_state.get("results", pd.DataFrame())
-filtered_results = st.session_state.get("filtered_results", pd.DataFrame())  # ✅ Ensure not None
+# ✅ Load `rules_config.json`
+rules_config_path = st.session_state.get("rules_config_path")
+
+if rules_config_path and os.path.exists(rules_config_path):
+    with open(rules_config_path, "r") as f:
+        rules_config = json.load(f)
+else:
+    rules_config = {"rules": []}
+
+# ✅ Sidebar: Dynamic Filters
+st.sidebar.header("🔍 Filter Rules")
+selected_filters = st.session_state["selected_filters"]
+
+for rule in rules_config.get("rules", []):
+    rule_number = rule.get("Rule Number", "Unknown Rule")
+    rule_type = rule.get("type", "Unknown Type")
+    rule_columns = ", ".join(rule.get("columns", []))
+
+    st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
+    st.sidebar.write(f"📝 Columns: {rule_columns}")
+
+    selected_filters.setdefault(rule_number, {})
+
+    for key, value in rule.items():
+        if isinstance(value, (int, float, dict)):
+            if isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    input_key = f"{key}_{sub_key}"
+                    prev_value = selected_filters[rule_number].get(input_key, sub_value)
+                    new_value = st.sidebar.number_input(
+                        f"{key} ({sub_key}) for {rule_number}", value=prev_value, key=f"{rule_number}_{input_key}"
+                    )
+                    selected_filters[rule_number][input_key] = new_value
+            else:
+                prev_value = selected_filters[rule_number].get(key, value)
+                new_value = st.sidebar.number_input(
+                    f"{key} for {rule_number}", value=prev_value, key=f"{rule_number}_{key}"
+                )
+                selected_filters[rule_number][key] = new_value
+
+st.session_state["selected_filters"] = selected_filters
+
+# ✅ Buttons
+apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
+reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
+
+# ✅ Reset Filters
+if reset_filter_clicked:
+    st.session_state["selected_filters"] = {}
+    st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
+    st.rerun()
+
+# ✅ Apply Filters
+if apply_filter_clicked and "results" in st.session_state:
+    processor = DataProcessor(
+        st.session_state["directory_config_path"],
+        st.session_state["job_response_path"],
+        st.session_state["rules_config_path"]
+    )
+    df_baseline = pd.read_excel(st.session_state["uploaded_file_baseline"], engine="openpyxl")
+    df_candidate = pd.read_excel(st.session_state["uploaded_file_candidate"], engine="openpyxl")
+
+    updated_results = processor.compare_files(
+        df_baseline, df_candidate, st.session_state["file_type"], st.session_state["selected_filters"]
+    )
+
+    st.session_state["results"] = updated_results
+    st.session_state["filtered_results"] = updated_results
+    st.rerun()
 
 # **📤 Export Button**
+filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
+job_response_path = st.session_state["job_response_path"]
+export_format = "CSV"  # Default file format
+
+if job_response_path and os.path.exists(job_response_path):
+    try:
+        with open(job_response_path, "r") as f:
+            job_response = json.load(f)
+            export_format = job_response.get("report", {}).get("format", "CSV").upper()
+    except Exception as e:
+        st.error(f"Error loading job response file: {str(e)}")
+        job_response = None
+else:
+    job_response = None
+
 if not filtered_results.empty and job_response:
     # ✅ Generate Filename Using Job Response Data
     baseline_env = job_response["baseline"]["env"]
@@ -246,9 +266,10 @@ if not filtered_results.empty and job_response:
     else:
         st.warning("Unsupported export format. Defaulting to CSV.")
 
-# ✅ Display KPIs
-if not filtered_results.empty:
+# ✅ Display Results
+filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
 
+if not filtered_results.empty:
     st.header("📊 Key Performance Indicators")
 
     # ✅ Ensure consistent capitalization in Category column
