@@ -26,7 +26,7 @@ streamlit run src/app.py
 
 streamlit cache clear -- for clearing cache
 
-
+tree -I 'output|venv'
 
 
 For Linux/macOS:
@@ -45,3 +45,98 @@ For Windows (PowerShell):
 $env:DIRECTORY_CONFIG_PATH="C:\path\to\directory_config.json"
 $env:JOB_RESPONSE_PATH="C:\path\to\job_creation_response.json"
 $env:RULES_CONFIG_PATH="C:\path\to\rules_config.json"
+
+
+----- Relative paths work fine ----
+
+python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" \
+              --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" \
+              --rules_config "src/rules_config1.json" --output "output/output.csv" --file_type "Excel" --format "csv"
+
+python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" \
+              --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" \
+              --rules_config "src/rules_config1.json" --output "output/output.json" --file_type "Excel" --format "json"
+
+python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" \
+              --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" \
+              --rules_config "src/rules_config1.json" --output "output/output.xlsx" --file_type "Excel" --format "excel"
+
+-------Example of an Absolute Path (macOS/Linux)-------
+
+python cli.py --baseline "/Users/storezadeveloper/Projects/ComparisonTrade/data/baseline.xlsx" \
+              --candidate "/Users/storezadeveloper/Projects/ComparisonTrade/data/candidate.xlsx" \
+              --directory_config "/Users/storezadeveloper/Projects/ComparisonTrade/config/directory_config.json" \
+              --job_response "/Users/storezadeveloper/Projects/ComparisonTrade/config/job_creation_response.json" \
+              --rules_config "/Users/storezadeveloper/Projects/ComparisonTrade/config/rules_config.json" \
+              --output "/Users/storezadeveloper/Projects/ComparisonTrade/output.csv" \
+              --file_type "Excel" --format "csv"
+
+
+-----------Example of an Absolute Path (Windows) ---------
+python cli.py --baseline "C:\Users\YourUsername\ComparisonTrade\data\baseline.xlsx" \
+              --candidate "C:\Users\YourUsername\ComparisonTrade\data\candidate.xlsx" \
+              --directory_config "C:\Users\YourUsername\ComparisonTrade\config\directory_config.json" \
+              --job_response "C:\Users\YourUsername\ComparisonTrade\config\job_creation_response.json" \
+              --rules_config "C:\Users\YourUsername\ComparisonTrade\config\rules_config.json" \
+              --output "C:\Users\YourUsername\ComparisonTrade\output.csv" \
+              --file_type "Excel" --format "csv"
+
+
+--------- For API ---------
+
+*** start server ***
+Linux/macOS:
+PYTHONPATH=src uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+
+Windows (PowerShell):
+$env:PYTHONPATH="src"; uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+
+Windows (Command Prompt):
+set PYTHONPATH=src
+uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+
+
+curl -X 'POST' 'http://localhost:8000/compare/' \
+    -F 'baseline_file=@asx_1.xlsx' \
+    -F 'candidate_file=@asx_2.xlsx' \
+    -F 'directory_config=@src/directory_config.json' \
+    -F 'job_response=@src/job_creation_response.json' \
+    -F 'rules_config=@src/rules_config1.json' \
+    -F 'file_type=Excel' \
+    -F 'output_format=json'
+
+curl -O http://localhost:8000/download/comparison_output.json
+
+curl -X 'POST' 'http://localhost:8000/compare/' \
+    -F 'baseline_file=@asx_1.xlsx' \
+    -F 'candidate_file=@asx_2.xlsx' \
+    -F 'directory_config=@src/directory_config.json' \
+    -F 'job_response=@src/job_creation_response.json' \
+    -F 'rules_config=@src/rules_config1.json' \
+    -F 'file_type=Excel' \
+    -F 'output_format=csv'
+
+curl -O http://localhost:8000/download/comparison_output.csv
+
+curl -X 'POST' 'http://localhost:8000/compare/' \
+    -F 'baseline_file=@asx_1.xlsx' \
+    -F 'candidate_file=@asx_2.xlsx' \
+    -F 'directory_config=@src/directory_config.json' \
+    -F 'job_response=@src/job_creation_response.json' \
+    -F 'rules_config=@src/rules_config1.json' \
+    -F 'file_type=Excel' \
+    -F 'output_format=xlsx'
+
+curl -O http://localhost:8000/download/comparison_output.xlsx
+
+
+curl -X 'POST' 'http://localhost:8000/compare/' \
+    -F 'baseline_file=@asx_1.xlsx' \
+    -F 'candidate_file=@asx_2.xlsx' \
+    -F 'directory_config=@src/directory_config.json' \
+    -F 'job_response=@src/job_creation_response.json' \
+    -F 'rules_config=@src/rules_config1.json' \
+    -F 'file_type=Excel' \
+    -F 'output_format=txt'
+
+curl -O http://localhost:8000/download/comparison_output.txt

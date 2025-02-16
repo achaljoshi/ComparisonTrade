@@ -3,24 +3,56 @@ import os
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
+from io import BytesIO
 
 
 class DataProcessor:
-    def __init__(self, directory_config_path=None, job_response_path=None, rules_config_path=None):
-        """Load directory paths, job details, and validation rules."""
-        self.directory_config_path = directory_config_path
-        self.job_response_path = job_response_path
-        self.rules_config_path = rules_config_path
+    def __init__(self, directory_config, job_response, rules_config):
+        """Initialize with file paths or direct dictionary data."""
+        
+        # ✅ Handle if config is a file path or a dictionary
+        if isinstance(directory_config, str) and os.path.exists(directory_config):
+            with open(directory_config, "r") as file:
+                self.directory_config = json.load(file)
+        else:
+            self.directory_config = directory_config  # Assume it's already a dictionary
 
-        # Load configuration files
-        with open(self.directory_config_path, "r") as file:
-            self.directory_config = json.load(file)
+        if isinstance(job_response, str) and os.path.exists(job_response):
+            with open(job_response, "r") as file:
+                self.job_response = json.load(file)
+        else:
+            self.job_response = job_response  # Assume it's already a dictionary
 
-        with open(self.job_response_path, "r") as file:
-            self.job_response = json.load(file)
+        if isinstance(rules_config, str) and os.path.exists(rules_config):
+            with open(rules_config, "r") as file:
+                self.rules_config = json.load(file)
+        else:
+            self.rules_config = rules_config  # Assume it's already a dictionary
+    
+    def run_comparison(self, baseline_file, candidate_file, file_type="Excel", filters=None):
+        """Run the discrepancy check process."""
+        if isinstance(baseline_file, BytesIO):
+            df_baseline = pd.read_excel(baseline_file, engine="openpyxl") if file_type == "Excel" else pd.read_csv(baseline_file)
+        else:
+            df_baseline = pd.read_excel(baseline_file, engine="openpyxl") if file_type == "Excel" else pd.read_csv(baseline_file)
 
-        with open(self.rules_config_path, "r") as file:
-            self.rules_config = json.load(file)
+        if isinstance(candidate_file, BytesIO):
+            df_candidate = pd.read_excel(candidate_file, engine="openpyxl") if file_type == "Excel" else pd.read_csv(candidate_file)
+        else:
+            df_candidate = pd.read_excel(candidate_file, engine="openpyxl") if file_type == "Excel" else pd.read_csv(candidate_file)
+
+        results = self.compare_files(df_baseline, df_candidate, file_type, filters)
+        return results
+
+    def save_results(self, results, output_path, format="csv"):
+        """Save results in the required format."""
+        if format == "csv":
+            results.to_csv(output_path, index=False)
+        elif format == "json":
+            results.to_json(output_path, orient="records", indent=4)
+        elif format == "excel":
+            results.to_excel(output_path, index=False)
+        print(f"Results saved at {output_path}")
 
     def resolve_file_paths(self):
         """Resolve actual file paths using job response and directory config."""

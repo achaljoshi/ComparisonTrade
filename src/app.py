@@ -85,7 +85,7 @@ if st.session_state["screen"] == "upload_config":
                 st.error(f"❌ Error saving `{file_name}`: {e}")
 
     # ✅ Debugging: Display uploaded file paths (for verification)
-    st.write("Uploaded file paths:", uploaded_files)
+    # st.write("Uploaded file paths:", uploaded_files)
 
     # ✅ Update session state only if all files are uploaded
     if len(uploaded_files) == len(missing_files):
