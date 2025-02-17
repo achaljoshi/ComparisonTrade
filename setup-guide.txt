@@ -49,17 +49,11 @@ $env:RULES_CONFIG_PATH="C:\path\to\rules_config.json"
 
 ----- Relative paths work fine ----
 
-python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" \
-              --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" \
-              --rules_config "src/rules_config1.json" --output "output/output.csv" --file_type "Excel" --format "csv"
+python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" --rules_config "src/rules_config1.json" --output "output/output.csv" --file_type "Excel" --format "csv"
 
-python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" \
-              --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" \
-              --rules_config "src/rules_config1.json" --output "output/output.json" --file_type "Excel" --format "json"
+python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" --rules_config "src/rules_config1.json" --output "output/output.json" --file_type "Excel" --format "json"
 
-python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" \
-              --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" \
-              --rules_config "src/rules_config1.json" --output "output/output.xlsx" --file_type "Excel" --format "excel"
+python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" --rules_config "src/rules_config1.json" --output "output/output.xlsx" --file_type "Excel" --format "excel"
 
 -------Example of an Absolute Path (macOS/Linux)-------
 
@@ -96,47 +90,18 @@ set PYTHONPATH=src
 uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
 
 
-curl -X 'POST' 'http://localhost:8000/compare/' \
-    -F 'baseline_file=@asx_1.xlsx' \
-    -F 'candidate_file=@asx_2.xlsx' \
-    -F 'directory_config=@src/directory_config.json' \
-    -F 'job_response=@src/job_creation_response.json' \
-    -F 'rules_config=@src/rules_config1.json' \
-    -F 'file_type=Excel' \
-    -F 'output_format=json'
+curl -X 'POST' 'http://localhost:8000/compare/' -F 'baseline_file=@asx_1.xlsx' -F 'candidate_file=@asx_2.xlsx' -F 'directory_config=@src/directory_config.json' -F 'job_response=@src/job_creation_response.json' -F 'rules_config=@src/rules_config1.json' -F 'file_type=Excel' -F 'output_format=json'
 
 curl -O http://localhost:8000/download/comparison_output.json
 
-curl -X 'POST' 'http://localhost:8000/compare/' \
-    -F 'baseline_file=@asx_1.xlsx' \
-    -F 'candidate_file=@asx_2.xlsx' \
-    -F 'directory_config=@src/directory_config.json' \
-    -F 'job_response=@src/job_creation_response.json' \
-    -F 'rules_config=@src/rules_config1.json' \
-    -F 'file_type=Excel' \
-    -F 'output_format=csv'
+curl -X 'POST' 'http://localhost:8000/compare/' -F 'baseline_file=@asx_1.xlsx' -F 'candidate_file=@asx_2.xlsx' -F 'directory_config=@src/directory_config.json' -F 'job_response=@src/job_creation_response.json' -F 'rules_config=@src/rules_config1.json' -F 'file_type=Excel' -F 'output_format=csv'
 
 curl -O http://localhost:8000/download/comparison_output.csv
 
-curl -X 'POST' 'http://localhost:8000/compare/' \
-    -F 'baseline_file=@asx_1.xlsx' \
-    -F 'candidate_file=@asx_2.xlsx' \
-    -F 'directory_config=@src/directory_config.json' \
-    -F 'job_response=@src/job_creation_response.json' \
-    -F 'rules_config=@src/rules_config1.json' \
-    -F 'file_type=Excel' \
-    -F 'output_format=xlsx'
+curl -X 'POST' 'http://localhost:8000/compare/' -F 'baseline_file=@asx_1.xlsx' -F 'candidate_file=@asx_2.xlsx' -F 'directory_config=@src/directory_config.json' -F 'job_response=@src/job_creation_response.json' -F 'rules_config=@src/rules_config1.json' -F 'file_type=Excel' -F 'output_format=xlsx'
 
 curl -O http://localhost:8000/download/comparison_output.xlsx
 
-
-curl -X 'POST' 'http://localhost:8000/compare/' \
-    -F 'baseline_file=@asx_1.xlsx' \
-    -F 'candidate_file=@asx_2.xlsx' \
-    -F 'directory_config=@src/directory_config.json' \
-    -F 'job_response=@src/job_creation_response.json' \
-    -F 'rules_config=@src/rules_config1.json' \
-    -F 'file_type=Excel' \
-    -F 'output_format=txt'
+curl -X 'POST' 'http://localhost:8000/compare/' -F 'baseline_file=@asx_1.xlsx' -F 'candidate_file=@asx_2.xlsx' -F 'directory_config=@src/directory_config.json' -F 'job_response=@src/job_creation_response.json' -F 'rules_config=@src/rules_config1.json' -F 'file_type=Excel' -F 'output_format=txt'
 
 curl -O http://localhost:8000/download/comparison_output.txt
