@@ -1,13 +1,14 @@
 {
     "identifier": "StockCode",
     "text_file_delimiter": ",",
+    "text_file_contains_header":"yes",
     "rules": [
         {
             "type": "Date_check",
             "Rule Number" : "Trade_Date_check_3",
             "columns": ["TradeDate"],
             "Category": "Warning",
-            "days": 0,
+            "days": 1,
             "description": "acceptable if trade date is having only 1 day difference"
         },
         {
@@ -21,8 +22,8 @@
             "type": "tolerance_check",
             "Rule Number": "tolerance_check_1",
             "columns": ["Open","Close"],
-            "acceptable": 3,
-            "warning": {"min": 3, "max": 10},
+            "acceptable": 4,
+            "warning": {"min": 4, "max": 10},
             "fatal": {"min": 10},
             "description": "Differences are acceptable if < 3, warnings if 3 < difference < 10, fatal if > 10"
         },
@@ -31,7 +32,7 @@
             "Rule Number": "Market_Cap_check2",
             "Category": "ABC",
             "columns": ["MarketCap"],
-            "threshold": 0.1,
+            "threshold": 1,
             "description": "Market Cap > Original Market Cap + delta is fatal if delta >= 0.1"
         },
         {

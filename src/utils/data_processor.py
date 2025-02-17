@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from io import BytesIO
+from pathlib import Path
 
 
 class DataProcessor:
@@ -61,28 +62,56 @@ class DataProcessor:
         candidate_env = self.job_response["candidate"]["env"]
         candidate_label = self.job_response["candidate"]["label"]
 
-        # Resolve file paths
-        input_file_baseline = self.directory_config["input_file_baseline"].format(
+        # ✅ Ensure paths are properly formatted
+        input_file_baseline = Path(self.directory_config["input_file_baseline"].format(
             input_base_dir_baseline=self.directory_config["input_base_dir_baseline"],
             ENV=baseline_env,
             DD_file_date=baseline_label
-        )
+        )).resolve()
 
-        input_file_candidate = self.directory_config["input_file_candidate"].format(
+        input_file_candidate = Path(self.directory_config["input_file_candidate"].format(
             input_base_dir_candidate=self.directory_config["input_base_dir_candidate"],
             ENV=candidate_env,
             DD_file_date=candidate_label
-        )
+        )).resolve()
 
-        output_file_result = self.directory_config["output_file_result"].format(
+        output_file_result = Path(self.directory_config["output_file_result"].format(
             output_base_dir=self.directory_config["output_base_dir"],
             BASELINE_ENV=baseline_env,
             CANDIDATE_ENV=candidate_env,
             DD_file_date=baseline_label,
             rundate=candidate_label
-        )
+        )).resolve()
 
         return input_file_baseline, input_file_candidate, output_file_result
+
+    
+    def read_text_file(self, file_path: Path) -> pd.DataFrame:
+        """Read a text file based on delimiter and header settings."""
+        delimiter = self.rules_config.get("text_file_delimiter", ",")
+        header = 0 if self.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
+        
+        return pd.read_csv(file_path, delimiter=delimiter, header=header)
+    
+    def read_dd_file(self, file_path: Path) -> pd.DataFrame:
+        """Read a DD file (.log or .csv) with appropriate delimiters."""
+        if file_path.suffix.lower() == ".log":
+            return pd.read_csv(file_path, delimiter="|", header=0)
+        elif file_path.suffix.lower() == ".csv":
+            return pd.read_csv(file_path, delimiter=",", header=0)
+        else:
+            raise ValueError(f"Unsupported DD file format: {file_path.suffix}")
+    
+    def read_file(self, file_path: Path, file_type: str) -> pd.DataFrame:
+        """Determine file type and read accordingly."""
+        if file_type == "Text":
+            return self.read_text_file(file_path)
+        elif file_type == "DD":
+            return self.read_dd_file(file_path)
+        elif file_type == "Excel" and file_path.suffix.lower() in [".xlsx", ".xls"]:
+            return pd.read_excel(file_path, engine="openpyxl")
+        else:
+            raise ValueError(f"Unsupported file type: {file_path.suffix}")
   
 
     def compare_files(self, df_baseline=None, df_candidate=None, file_type="Excel", filters=None):
@@ -96,8 +125,8 @@ class DataProcessor:
             df_prod, df_qa = df_baseline.copy(), df_candidate.copy()
         else:
             input_file_baseline, input_file_candidate, _ = self.resolve_file_paths()
-            df_prod = pd.read_excel(input_file_baseline, engine="openpyxl")
-            df_qa = pd.read_excel(input_file_candidate, engine="openpyxl")
+            df_prod = self.read_file(Path(input_file_baseline), file_type)
+            df_qa = self.read_file(Path(input_file_candidate), file_type)
 
         df_prod.columns = df_prod.columns.str.strip()
         df_qa.columns = df_qa.columns.str.strip()

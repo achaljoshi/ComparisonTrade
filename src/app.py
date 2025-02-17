@@ -121,10 +121,19 @@ if st.button("🗑️ Cleanup Temporary Files"):
 if st.session_state["screen"] == "file_type_selection":
     st.title("Select File Type for Comparison")
 
-    file_type = st.radio("Choose the file type:", ["Excel (.xlsx)", "Datadog Logs (.log)", "Text Files (.txt)"])
+    # File type selection from UI
+    file_type = st.radio("Choose the file type:", ["Excel (.xlsx)", "DD (.log, .csv)", "Text Files (.txt)"])
+
+    # Mapping UI file type selection to simplified values
+    file_type_mapping = {
+        "Excel (.xlsx)": "Excel",
+        "DD (.log, .csv)": "DD",
+        "Text Files (.txt)": "Text"
+    }
 
     if st.button("Next", key="next_button_file_type"):
-        st.session_state["file_type"] = file_type
+        # Store the mapped file type for consistent internal processing
+        st.session_state["file_type"] = file_type_mapping[file_type]
         st.session_state["screen"] = "file_selection"
         st.rerun()
 
@@ -134,8 +143,8 @@ if st.session_state["screen"] == "file_type_selection":
 if st.session_state["screen"] == "file_selection":
     st.title("Upload Files for Comparison")
 
-    uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt"], key="baseline_file")
-    uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt"], key="candidate_file")
+    uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt", "csv"], key="baseline_file")
+    uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt", "csv"], key="candidate_file")
 
     if st.button("Run Comparison", key="run_comparison_button"):
         if uploaded_file_baseline and uploaded_file_candidate:
@@ -145,11 +154,24 @@ if st.session_state["screen"] == "file_selection":
                     st.session_state["job_response_path"],
                     st.session_state["rules_config_path"]
                 )
-                df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
-                df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
+                file_type = st.session_state["file_type"]
+                if file_type == "Excel":
+                    df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
+                    df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
+                elif file_type in ["Text", "DD"]:
+                    delimiter = processor.rules_config.get("text_file_delimiter", ",")
+                    header = 0 if processor.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
+                    df_baseline = pd.read_csv(uploaded_file_baseline, delimiter=delimiter, header=header)
+                    df_candidate = pd.read_csv(uploaded_file_candidate, delimiter=delimiter, header=header)
+                else:
+                    st.error("Unsupported file type selected.")
+                    st.stop()
 
                 # ✅ Run Comparison
                 st.write("✅ Uploaded files are successfully read as DataFrames.")
+                if df_baseline.empty or df_candidate.empty:
+                    st.error("One of the uploaded files is empty. Please check your data.")
+                    st.stop()
                 results = processor.compare_files(df_baseline, df_candidate, st.session_state["file_type"])
                 st.success("Comparison Completed! Discrepancy report generated.")
 
@@ -221,8 +243,18 @@ if apply_filter_clicked and "results" in st.session_state:
         st.session_state["job_response_path"],
         st.session_state["rules_config_path"]
     )
-    df_baseline = pd.read_excel(st.session_state["uploaded_file_baseline"], engine="openpyxl")
-    df_candidate = pd.read_excel(st.session_state["uploaded_file_candidate"], engine="openpyxl")
+    file_type = st.session_state["file_type"]
+    if file_type == "Excel":
+        df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
+        df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
+    elif file_type in ["Text", "DD"]:
+        delimiter = processor.rules_config.get("text_file_delimiter", ",")
+        header = 0 if processor.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
+        df_baseline = pd.read_csv(uploaded_file_baseline, delimiter=delimiter, header=header)
+        df_candidate = pd.read_csv(uploaded_file_candidate, delimiter=delimiter, header=header)
+    else:
+        st.error("Unsupported file type selected.")
+        st.stop()
 
     updated_results = processor.compare_files(
         df_baseline, df_candidate, st.session_state["file_type"], st.session_state["selected_filters"]

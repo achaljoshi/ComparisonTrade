@@ -1,6 +1,7 @@
 {
     "identifier": "StockCode",
     "text_file_delimiter": ",",
+    "text_file_contains_header":"yes",
     "rules": [
         {
             "type": "Date_check",

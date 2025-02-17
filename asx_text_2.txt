@@ -1,0 +1,8 @@
+StockCode,CompanyName,Sector,Open,Close,Volume,TradeDate,MarketCap
+BHP,BHPGroup,Materials,4.20,45.90,2500000,3/2/2024,100
+CBA,CommonwealthBank,Financials,102.50,100,1850000,3/1/2024,175.20
+WBC,WestpacBanking,Financials,23,4.10,12000,3/1/2024,85.30
+CSL,CSLLimited,Financials,291.40,292.80,455000,3/5/2024,141
+RIO,RioTintoLimited,Materials,127.80,128.15,680000,3/1/2024,47.70
+ANZ,ANZBankingGroup,Healthcare,28.90,2.15,950000,3/1/2024,2.10
+Achal,ANZBankingGroup,Healthcare,28.90,2.15,950000,3/1/2024,2.10
