@@ -105,3 +105,30 @@ curl -O http://localhost:8000/download/comparison_output.xlsx
 curl -X 'POST' 'http://localhost:8000/compare/' -F 'baseline_file=@asx_1.xlsx' -F 'candidate_file=@asx_2.xlsx' -F 'directory_config=@src/directory_config.json' -F 'job_response=@src/job_creation_response.json' -F 'rules_config=@src/rules_config1.json' -F 'file_type=Excel' -F 'output_format=txt'
 
 curl -O http://localhost:8000/download/comparison_output.txt
+
+
+
+
+
+
+
+------- AI part ----
+
+export OPENAI_API_KEY="yourkey"
+
+export FLASK_APP=src/ai.py
+export FLASK_ENV=development
+export FASTAPI_ENV=development
+
+**Start FastAPI (Backend API) Run the FastAPI service in one terminal:
+cd src
+uvicorn ai:app --host 0.0.0.0 --port 5050 --reload
+
+    
+    
+    ---if fails---
+    lsof -i :5000
+    lsof -i :8000
+    kill -9 <PID>
+    kill -9 462
+

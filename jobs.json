@@ -1,0 +1,41 @@
+{
+    "2ccf4c3e-b44f-473c-a751-9df2e40756cf": {
+        "status": "completed",
+        "baseline": "asx_csv_1.csv",
+        "candidate": "asx_csv_2.csv",
+        "results": {
+            "mismatch_count": 10,
+            "critical_errors": 2
+        }
+    },
+    "1be1ba43-644b-4a02-be26-92e7875811ea": {
+        "status": "completed",
+        "baseline": "asx_csv_1.csv",
+        "candidate": "asx_csv_2.csv",
+        "results": {
+            "mismatch_count": 2,
+            "critical_errors": 0,
+            "data": [
+                {
+                    "row": 0,
+                    "column": "Sector",
+                    "baseline_value": 424,
+                    "candidate_value": 250,
+                    "severity": "WARNING"
+                },
+                {
+                    "row": 5,
+                    "column": "StockCode",
+                    "baseline_value": 212,
+                    "candidate_value": 211,
+                    "severity": "WARNING"
+                }
+            ]
+        }
+    },
+    "761de54b-0c7e-4564-bbef-81317d4ef4ba": {
+        "status": "processing",
+        "baseline": "asx_1.xlsx",
+        "candidate": "asx_2.xlsx"
+    }
+}
