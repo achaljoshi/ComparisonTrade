@@ -1,140 +1,151 @@
-import os
-import tempfile
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
+from fastapi.responses import JSONResponse
+from typing import Dict, Optional, List
+from pydantic import BaseModel
+from datetime import datetime
 import pandas as pd
-from utils.data_processor import DataProcessor
+import json
+from pathlib import Path
+import tempfile
+import os
+import shutil
+from utils.data_processor import DataProcessor, ComparisonResult
 
-# ✅ Ensure output directory exists
-OUTPUT_DIR = "output"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+app = FastAPI(
+    title="Discrepancy Analysis API",
+    description="API for analyzing discrepancies between baseline and candidate files",
+    version="1.0.0"
+)
 
-# ✅ MIME types for different file formats
-MIME_TYPES = {
-    "csv": "text/csv",
-    "json": "application/json",
-    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "txt": "text/plain",
-}
+class ComparisonConfig(BaseModel):
+    baseline_env: str
+    baseline_label: str
+    candidate_env: str
+    candidate_label: str
+    file_type: str
+    filters: Optional[Dict] = None
 
-app = FastAPI()
+class ComparisonResponse(BaseModel):
+    job_id: str
+    status: str
+    timestamp: datetime
+    results: Optional[Dict] = None
+    error: Optional[str] = None
 
-@app.post("/compare/")
+@app.post("/api/v1/compare")
 async def compare_files(
-    baseline_file: UploadFile = File(...),
-    candidate_file: UploadFile = File(...),
+    config: ComparisonConfig,
+    background_tasks: BackgroundTasks,
     directory_config: UploadFile = File(...),
     job_response: UploadFile = File(...),
     rules_config: UploadFile = File(...),
-    file_type: str = Form(...),
-    output_format: str = Form("json")  # Supports: json, csv, xlsx, txt
-):
-    temp_files = []  # ✅ Store temp file paths for safe deletion
-
+    baseline_file: UploadFile = File(...),
+    candidate_file: UploadFile = File(...)
+) -> ComparisonResponse:
+    job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    
     try:
-        # ✅ Save uploaded files to temporary files
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_baseline:
-            temp_baseline.write(await baseline_file.read())
-            baseline_path = temp_baseline.name
-            temp_files.append(baseline_path)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_candidate:
-            temp_candidate.write(await candidate_file.read())
-            candidate_path = temp_candidate.name
-            temp_files.append(candidate_path)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_directory:
-            temp_directory.write(await directory_config.read())
-            directory_path = temp_directory.name
-            temp_files.append(directory_path)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_job:
-            temp_job.write(await job_response.read())
-            job_path = temp_job.name
-            temp_files.append(job_path)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_rules:
-            temp_rules.write(await rules_config.read())
-            rules_path = temp_rules.name
-            temp_files.append(rules_path)
-
-        # ✅ Initialize DataProcessor
-        tool = DataProcessor(directory_path, job_path, rules_path)
-
-        # ✅ Read Excel files into DataFrames
-        df_baseline = pd.read_excel(baseline_path, engine="openpyxl") if file_type == "Excel" else pd.read_csv(baseline_path)
-        df_candidate = pd.read_excel(candidate_path, engine="openpyxl") if file_type == "Excel" else pd.read_csv(candidate_path)
-
-        # ✅ Run Comparison
-        results = tool.compare_files(df_baseline, df_candidate, file_type)
-
-        # ✅ Save output to requested format
-        output_filename = f"comparison_output.{output_format.lower()}"
-        output_filepath = os.path.join(OUTPUT_DIR, output_filename)
-        file_extension = output_format.lower()
-
-        if file_extension == "csv":
-            results.to_csv(output_filepath, index=False)
-
-        elif file_extension == "json":
-            results.to_json(output_filepath, orient="records", indent=2)
-
-        elif file_extension in ["xlsx", "excel"]:
-            results.to_excel(output_filepath, index=False, engine="openpyxl")
-
-        elif file_extension in ["txt", "text"]:
-            results_text = results.to_string(index=False)  # ✅ FIX: Properly format DataFrame as text
-            with open(output_filepath, "w", encoding="utf-8") as f:
-                f.write(results_text)
-
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported output format. Use json, csv, xlsx, or txt.")
-
-        # ✅ Cleanup Temporary Files (except output)
-        for file_path in temp_files:
-            try:
-                os.remove(file_path)
-            except Exception as e:
-                print(f"Warning: Failed to delete temp file {file_path} - {str(e)}")
-
-        # ✅ Return JSON response for non-file formats
-        if file_extension == "json":
-            return JSONResponse(
-                content={
-                    "message": "Comparison completed successfully.",
-                    "output_format": "json",
-                    "data": results.to_dict(orient="records")
-                }
-            )
-
-        # ✅ Otherwise, return download URL
-        return JSONResponse(
-            content={
-                "message": "Comparison completed successfully.",
-                "output_format": file_extension,
-                "download_url": f"/download/{output_filename}"
-            }
+        processor = DataProcessor(
+            json.load(directory_config.file),
+            json.load(job_response.file),
+            json.load(rules_config.file)
+        )
+        
+        df_baseline = read_file_content(baseline_file, config.file_type)
+        df_candidate = read_file_content(candidate_file, config.file_type)
+        
+        results = processor.compare_files(
+            df_baseline,
+            df_candidate,
+            config.file_type,
+            config.filters
+        )
+        
+        return ComparisonResponse(
+            job_id=job_id,
+            status="completed",
+            timestamp=datetime.now(),
+            results=results.discrepancies.to_dict(orient="records")
+        )
+        
+    except Exception as e:
+        return ComparisonResponse(
+            job_id=job_id,
+            status="failed",
+            timestamp=datetime.now(),
+            error=str(e)
         )
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing files: {str(e)}")
+def save_config_files(temp_dir: Path, *config_files: UploadFile) -> Dict[str, Path]:
+    config_paths = {}
+    for config_file in config_files:
+        file_path = temp_dir / config_file.filename
+        with open(file_path, "wb") as f:
+            shutil.copyfileobj(config_file.file, f)
+        config_paths[config_file.filename.replace(".json", "")] = file_path
+    return config_paths
 
+def save_data_files(temp_dir: Path, baseline_file: UploadFile, candidate_file: UploadFile) -> Dict[str, Path]:
+    data_paths = {}
+    for file_name, file in [("baseline", baseline_file), ("candidate", candidate_file)]:
+        file_path = temp_dir / file.filename
+        with open(file_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        data_paths[file_name] = file_path
+    return data_paths
 
-@app.get("/download/{filename}")
-async def download_output(filename: str):
-    """Download the generated output file with correct MIME type."""
-    filepath = os.path.join(OUTPUT_DIR, filename)
+def read_file(file_path: Path, file_type: str) -> pd.DataFrame:
+    if file_type == "Excel":
+        return pd.read_excel(file_path)
+    return pd.read_csv(file_path)
 
-    # ✅ Ensure file exists
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="File not found")
+def format_comparison_results(results: ComparisonResult, config: ComparisonConfig) -> Dict:
+    return {
+        "metadata": {
+            "baseline_env": config.baseline_env,
+            "baseline_label": config.baseline_label,
+            "candidate_env": config.candidate_env,
+            "candidate_label": config.candidate_label,
+            "file_type": config.file_type,
+            "comparison_timestamp": datetime.now().isoformat()
+        },
+        "summary": {
+            "total_discrepancies": len(results.discrepancies),
+            "categories": results.discrepancies["Category"].value_counts().to_dict(),
+            "missing_records": {
+                "baseline": (results.discrepancies["Rule Type"] == "Missing in Baseline").sum(),
+                "candidate": (results.discrepancies["Rule Type"] == "Missing in Candidate").sum()
+            }
+        },
+        "discrepancies": results.discrepancies.to_dict(orient="records")
+    }
 
-    # ✅ Determine MIME type from file extension
-    file_extension = filename.split(".")[-1]
-    mime_type = MIME_TYPES.get(file_extension, "application/octet-stream")
+def cleanup_temp_files(temp_dir: Path) -> None:
+    shutil.rmtree(temp_dir)
 
-    return FileResponse(
-        path=filepath,
-        filename=filename,
-        media_type=mime_type
-    )
+@app.get("/api/v1/health")
+async def health_check() -> Dict:
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "timestamp": datetime.now().isoformat()
+    }
+
+def read_file_content(file: UploadFile, file_type: str) -> pd.DataFrame:
+    # Create a temporary file to store the uploaded content
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        # Write the uploaded file content to temp file
+        shutil.copyfileobj(file.file, temp_file)
+        temp_file_path = temp_file.name
+
+    try:
+        # Read the file based on type
+        if file_type == "Excel":
+            df = pd.read_excel(temp_file_path)
+        else:
+            df = pd.read_csv(temp_file_path)
+        
+        return df
+    finally:
+        # Clean up the temporary file
+        os.unlink(temp_file_path)

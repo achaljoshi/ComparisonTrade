@@ -1,393 +1,309 @@
 import streamlit as st
-import os
+from typing import Dict, Optional, Union
+from dataclasses import dataclass
 import pandas as pd
 import plotly.express as px
+import plotly.colors
+from datetime import datetime
+from utils.data_processor import DataProcessor, ComparisonResult
+import dask.dataframe as dd
+from concurrent.futures import ThreadPoolExecutor
 import json
 from io import BytesIO
-from utils.data_processor import DataProcessor
-import plotly.colors
-import shutil
-import tempfile
 
+CHUNK_SIZE = 100000
+MAX_WORKERS = 4
 
+@dataclass
+class AppState:
+    screen: str = "upload_config"
+    directory_config: Optional[Dict] = None
+    job_response: Optional[Dict] = None
+    rules_config: Optional[Dict] = None
+    selected_filters: Dict = None
+    comparison_results: Optional[ComparisonResult] = None
+    file_type: Optional[str] = None
+    baseline_df: Optional[dd.DataFrame] = None
+    candidate_df: Optional[dd.DataFrame] = None
 
-# Get the absolute path of the current script's directory
-base_dir = os.path.dirname(os.path.abspath(__file__))
-cache_dir = os.path.join(base_dir, "utils", "__pycache__")
+class DiscrepancyDashboard:
+    def __init__(self):
+        self.initialize_app()
+        self.color_palette = plotly.colors.qualitative.Set1
 
-# Check if the directory exists before attempting to delete it
-if os.path.exists(cache_dir):
-    shutil.rmtree(cache_dir)
-    print(f"Deleted {cache_dir}")
+    def initialize_app(self) -> None:
+        st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
+        if "state" not in st.session_state:
+            st.session_state.state = AppState()
+        self.setup_sidebar()
 
-# **✅ Ensure `st.set_page_config()` is first**
-st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
+    def setup_sidebar(self) -> None:
+        if st.sidebar.button("🔄 Clear Cache & Restart"):
+            st.cache_data.clear()
+            st.session_state.clear()
+            st.rerun()
 
-# ✅ Clear Cache & Restart Button
-if st.sidebar.button("🔄 Clear Cache & Restart", key="restart_button"):
-    st.cache_data.clear()
-    st.session_state.clear()
-    st.rerun()
+    def run(self) -> None:
+        current_screen = st.session_state.state.screen
+        if current_screen == "upload_config":
+            self.handle_config_upload()
+        elif current_screen == "file_type_selection":
+            self.handle_file_type_selection()
+        elif current_screen == "file_selection":
+            self.handle_file_comparison()
 
-# ✅ Ensure session state variables persist
-if "screen" not in st.session_state:
-    st.session_state["screen"] = "upload_config"
-
-if "directory_config_path" not in st.session_state:
-    st.session_state["directory_config_path"] = None
-if "job_response_path" not in st.session_state:
-    st.session_state["job_response_path"] = None
-if "rules_config_path" not in st.session_state:
-    st.session_state["rules_config_path"] = None
-if "selected_filters" not in st.session_state:
-    st.session_state["selected_filters"] = {}
-if "filtered_results" not in st.session_state:
-    st.session_state["filtered_results"] = pd.DataFrame()
-
-# ✅ Define required config files before using them
-required_files = {
-    "directory_config.json": "directory_config_path",
-    "job_creation_response.json": "job_response_path",
-    "rules_config.json": "rules_config_path"
-}
-
-# ✅ Step 1: Upload Configuration Files
-if st.session_state["screen"] == "upload_config":
-    st.title("Upload Configuration Files")
-
-    missing_files = {}
-    if not st.session_state.get("directory_config_path"):
-        missing_files["directory_config.json"] = "directory_config.json"
-    if not st.session_state.get("job_response_path"):
-        missing_files["job_creation_response.json"] = "job_creation_response.json"
-    if not st.session_state.get("rules_config_path"):
-        missing_files["rules_config.json"] = "rules_config.json"
-
-    uploaded_files = {}
-
-    temp_dir = tempfile.mkdtemp()
-
-    for file_name, key in missing_files.items():
-        uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=key)
-
-        if uploaded_file is not None:
-            save_path = os.path.join(temp_dir, file_name)  # ✅ Save in a unique temp directory
-            
-            try:
-                # ✅ Ensure safe file writing (avoids permission errors)
-                with open(save_path, "wb") as f:
-                    shutil.copyfileobj(uploaded_file, f)  # ✅ Efficient way to copy file content
-                
-                uploaded_files[key] = save_path  # ✅ Store path in dictionary
-                st.success(f"`{file_name}` uploaded successfully!")
-
-            except Exception as e:
-                st.error(f"❌ Error saving `{file_name}`: {e}")
-
-    # ✅ Debugging: Display uploaded file paths (for verification)
-    # st.write("Uploaded file paths:", uploaded_files)
-
-    # ✅ Update session state only if all files are uploaded
-    if len(uploaded_files) == len(missing_files):
-        st.session_state["directory_config_path"] = uploaded_files.get("directory_config.json", st.session_state.get("directory_config_path"))
-        st.session_state["job_response_path"] = uploaded_files.get("job_creation_response.json", st.session_state.get("job_response_path"))
-        st.session_state["rules_config_path"] = uploaded_files.get("rules_config.json", st.session_state.get("rules_config_path"))
-
-        st.success("✅ Configuration files uploaded successfully! Click 'Next' to proceed.")
+    def handle_config_upload(self) -> None:
+        st.title("Upload Configuration Files")
+        uploaded_files = {}
         
-        if st.button("Next"):
-            st.session_state["screen"] = "file_type_selection"
-            st.rerun()  # ✅ Refresh UI to move to the next step
+        for config_name, state_key in {
+            "Directory Config": "directory_config",
+            "Job Response": "job_response",
+            "Rules Config": "rules_config"
+        }.items():
+            uploaded_file = st.file_uploader(f"Upload {config_name}", type=["json"])
+            if uploaded_file:
+                try:
+                    config_data = json.load(uploaded_file)
+                    setattr(st.session_state.state, state_key, config_data)
+                    uploaded_files[state_key] = config_data
+                    st.success(f"{config_name} uploaded successfully!")
+                except Exception as e:
+                    st.error(f"Error loading {config_name}: {str(e)}")
 
-    st.stop()
+        if len(uploaded_files) == 3:
+            if st.button("Next"):
+                st.session_state.state.screen = "file_type_selection"
+                st.rerun()
 
-# ✅ Cleanup function: Delete temp files & folder
-def cleanup_temp_files():
-    try:
-        for file_path in uploaded_files.values():
-            if os.path.exists(file_path):
-                os.remove(file_path)  # ✅ Delete individual temp files
-        
-        shutil.rmtree(temp_dir)  # ✅ Remove the entire temp directory
-        st.success("Temporary files cleaned up successfully!")
-
-    except Exception as e:
-        st.error(f"❌ Error during cleanup: {e}")
-
-if st.button("🗑️ Cleanup Temporary Files"):
-    cleanup_temp_files()
-
-# ✅ Step 2: Select File Type
-if st.session_state["screen"] == "file_type_selection":
-    st.title("Select File Type for Comparison")
-
-    # File type selection from UI
-    file_type = st.radio("Choose the file type:", ["Excel (.xlsx)", "DD (.log, .csv)", "Text Files (.txt)"])
-
-    # Mapping UI file type selection to simplified values
-    file_type_mapping = {
-        "Excel (.xlsx)": "Excel",
-        "DD (.log, .csv)": "DD",
-        "Text Files (.txt)": "Text"
-    }
-
-    if st.button("Next", key="next_button_file_type"):
-        # Store the mapped file type for consistent internal processing
-        st.session_state["file_type"] = file_type_mapping[file_type]
-        st.session_state["screen"] = "file_selection"
-        st.rerun()
-
-    st.stop()
-
-# ✅ Step 3: Upload Files for Comparison
-if st.session_state["screen"] == "file_selection":
-    st.title("Upload Files for Comparison")
-
-    uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt", "csv"], key="baseline_file")
-    uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt", "csv"], key="candidate_file")
-
-    if st.button("Run Comparison", key="run_comparison_button"):
-        if uploaded_file_baseline and uploaded_file_candidate:
-            try:
-                processor = DataProcessor(
-                    st.session_state["directory_config_path"],
-                    st.session_state["job_response_path"],
-                    st.session_state["rules_config_path"]
-                )
-                file_type = st.session_state["file_type"]
-                if file_type == "Excel":
-                    df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
-                    df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
-                elif file_type in ["Text", "DD"]:
-                    delimiter = processor.rules_config.get("text_file_delimiter", ",")
-                    header = 0 if processor.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
-                    df_baseline = pd.read_csv(uploaded_file_baseline, delimiter=delimiter, header=header)
-                    df_candidate = pd.read_csv(uploaded_file_candidate, delimiter=delimiter, header=header)
-                else:
-                    st.error("Unsupported file type selected.")
-                    st.stop()
-
-                # ✅ Run Comparison
-                st.write("✅ Uploaded files are successfully read as DataFrames.")
-                if df_baseline.empty or df_candidate.empty:
-                    st.error("One of the uploaded files is empty. Please check your data.")
-                    st.stop()
-                results = processor.compare_files(df_baseline, df_candidate, st.session_state["file_type"])
-                st.success("Comparison Completed! Discrepancy report generated.")
-
-                # ✅ Store results in session state
-                st.session_state["results"] = results
-                st.session_state["filtered_results"] = results
-                st.session_state["uploaded_file_baseline"] = uploaded_file_baseline
-                st.session_state["uploaded_file_candidate"] = uploaded_file_candidate
-
-            except Exception as e:
-                st.error(f"Error processing files: {str(e)}")
-
-# ✅ Load `rules_config.json`
-rules_config_path = st.session_state.get("rules_config_path")
-
-if rules_config_path and os.path.exists(rules_config_path):
-    with open(rules_config_path, "r") as f:
-        rules_config = json.load(f)
-else:
-    rules_config = {"rules": []}
-
-# ✅ Sidebar: Dynamic Filters
-st.sidebar.header("🔍 Filter Rules")
-selected_filters = st.session_state["selected_filters"]
-
-for rule in rules_config.get("rules", []):
-    rule_number = rule.get("Rule Number", "Unknown Rule")
-    rule_type = rule.get("type", "Unknown Type")
-    rule_columns = ", ".join(rule.get("columns", []))
-
-    st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
-    st.sidebar.write(f"📝 Columns: {rule_columns}")
-
-    selected_filters.setdefault(rule_number, {})
-
-    for key, value in rule.items():
-        if isinstance(value, (int, float, dict)):
-            if isinstance(value, dict):
-                for sub_key, sub_value in value.items():
-                    input_key = f"{key}_{sub_key}"
-                    prev_value = selected_filters[rule_number].get(input_key, sub_value)
-                    new_value = st.sidebar.number_input(
-                        f"{key} ({sub_key}) for {rule_number}", value=prev_value, key=f"{rule_number}_{input_key}"
-                    )
-                    selected_filters[rule_number][input_key] = new_value
-            else:
-                prev_value = selected_filters[rule_number].get(key, value)
-                new_value = st.sidebar.number_input(
-                    f"{key} for {rule_number}", value=prev_value, key=f"{rule_number}_{key}"
-                )
-                selected_filters[rule_number][key] = new_value
-
-st.session_state["selected_filters"] = selected_filters
-
-# ✅ Buttons
-apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
-reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
-
-# ✅ Reset Filters
-if reset_filter_clicked:
-    st.session_state["selected_filters"] = {}
-    st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
-    st.rerun()
-
-# ✅ Apply Filters
-if apply_filter_clicked and "results" in st.session_state:
-    processor = DataProcessor(
-        st.session_state["directory_config_path"],
-        st.session_state["job_response_path"],
-        st.session_state["rules_config_path"]
-    )
-    file_type = st.session_state["file_type"]
-    if file_type == "Excel":
-        df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
-        df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
-    elif file_type in ["Text", "DD"]:
-        delimiter = processor.rules_config.get("text_file_delimiter", ",")
-        header = 0 if processor.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
-        df_baseline = pd.read_csv(uploaded_file_baseline, delimiter=delimiter, header=header)
-        df_candidate = pd.read_csv(uploaded_file_candidate, delimiter=delimiter, header=header)
-    else:
-        st.error("Unsupported file type selected.")
-        st.stop()
-
-    updated_results = processor.compare_files(
-        df_baseline, df_candidate, st.session_state["file_type"], st.session_state["selected_filters"]
-    )
-
-    st.session_state["results"] = updated_results
-    st.session_state["filtered_results"] = updated_results
-    st.rerun()
-
-# **📤 Export Button**
-filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
-job_response_path = st.session_state["job_response_path"]
-export_format = "CSV"  # Default file format
-
-if job_response_path and os.path.exists(job_response_path):
-    try:
-        with open(job_response_path, "r") as f:
-            job_response = json.load(f)
-            export_format = job_response.get("report", {}).get("format", "CSV").upper()
-    except Exception as e:
-        st.error(f"Error loading job response file: {str(e)}")
-        job_response = None
-else:
-    job_response = None
-
-if not filtered_results.empty and job_response:
-    # ✅ Generate Filename Using Job Response Data
-    baseline_env = job_response["baseline"]["env"]
-    candidate_env = job_response["candidate"]["env"]
-    baseline_label = job_response["baseline"]["label"]
-    candidate_label = job_response["candidate"]["label"]
-
-    filename = f"discrepancy_report_{baseline_env}_{candidate_env}_{baseline_label}_{candidate_label}"
-
-    # ✅ Export Data Based on Format
-    export_data = None
-    mime_type = "text/plain"
-
-    if export_format == "CSV":
-        export_data = filtered_results.to_csv(index=False).encode("utf-8")
-        filename += ".csv"
-        mime_type = "text/csv"
-
-    elif export_format == "EXCEL":
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            filtered_results.to_excel(writer, index=False, sheet_name="Discrepancies")
-        export_data = output.getvalue()
-        filename += ".xlsx"
-        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-    elif export_format == "JSON":
-        export_data = filtered_results.to_json(orient="records", indent=4).encode("utf-8")
-        filename += ".json"
-        mime_type = "application/json"
-
-    elif export_format == "TEXT":
-        export_data = filtered_results.to_string(index=False).encode("utf-8")
-        filename += ".txt"
-        mime_type = "text/plain"
-
-    if export_data:
-        st.download_button(
-            label="📥 Download Report",
-            data=export_data,
-            file_name=filename,
-            mime=mime_type
+    def handle_file_type_selection(self) -> None:
+        st.title("Select File Type for Comparison")
+        file_type = st.radio(
+            "Choose file type:",
+            ["Excel (.xlsx)", "DD (.log, .csv)", "Text Files (.txt)"]
         )
-    else:
-        st.warning("Unsupported export format. Defaulting to CSV.")
 
-# ✅ Display Results
-filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
+        if st.button("Next"):
+            file_type_mapping = {
+                "Excel (.xlsx)": "Excel",
+                "DD (.log, .csv)": "DD",
+                "Text Files (.txt)": "Text"
+            }
+            st.session_state.state.file_type = file_type_mapping[file_type]
+            st.session_state.state.screen = "file_selection"
+            st.rerun()
 
-if not filtered_results.empty:
-    st.header("📊 Key Performance Indicators")
+    def handle_file_comparison(self) -> None:
+        st.title("Upload Files for Comparison")
+        
+        baseline_file = st.file_uploader("Upload Baseline File", type=self._get_allowed_extensions())
+        candidate_file = st.file_uploader("Upload Candidate File", type=self._get_allowed_extensions())
 
-    # ✅ Ensure consistent capitalization in Category column
-    filtered_results["Category"] = filtered_results["Category"].str.upper()
+        if baseline_file and candidate_file and st.button("Run Comparison"):
+            with st.spinner("Processing comparison..."):
+                try:
+                    processor = DataProcessor(
+                        st.session_state.state.directory_config,
+                        st.session_state.state.job_response,
+                        st.session_state.state.rules_config
+                    )
+                    
+                    # Process files in chunks using Dask
+                    df_baseline = self._read_file_in_chunks(baseline_file)
+                    df_candidate = self._read_file_in_chunks(candidate_file)
+                    
+                    results = processor.compare_files(
+                        df_baseline,
+                        df_candidate,
+                        st.session_state.state.file_type,
+                        st.session_state.state.selected_filters
+                    )
+                    
+                    st.session_state.state.comparison_results = results
+                    self.display_results(results)
+                    
+                except Exception as e:
+                    st.error(f"Error during comparison: {str(e)}")
 
-    # ✅ Count each unique category dynamically
-    category_counts = filtered_results["Category"].value_counts().to_dict()
+    def _get_allowed_extensions(self) -> list:
+        file_type = st.session_state.state.file_type
+        extensions = {
+            "Excel": ["xlsx", "xls"],
+            "Text": ["txt", "csv"],
+            "DD": ["log", "csv"]
+        }
+        return extensions.get(file_type, [])
 
+    def _read_file_in_chunks(self, file) -> dd.DataFrame:
+        file_type = st.session_state.state.file_type
+        if file_type == "Excel":
+            return dd.from_pandas(pd.read_excel(file), npartitions=CHUNK_SIZE)
+        return dd.read_csv(file, blocksize=CHUNK_SIZE)
 
-    # ✅ Identify Missing Rows
-    missing_baseline_count = (filtered_results["Rule Type"] == "Missing in Baseline").sum()
-    missing_candidate_count = (filtered_results["Rule Type"] == "Missing in Candidate").sum()
+    def display_results(self, results: ComparisonResult) -> None:
+        st.header("📊 Key Performance Indicators")
 
-    # ✅ Total metrics to display
-    total_metrics = len(category_counts) + 3  # Dynamic categories + threshold + missing rows
+        # Process results in chunks for large datasets
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            category_counts = executor.submit(
+                lambda: results.discrepancies["Category"].value_counts().to_dict()
+            ).result()
+            missing_counts = executor.submit(
+                self._calculate_missing_counts, results.discrepancies
+            ).result()
 
-    # ✅ Create correct number of columns
-    kpi_columns = st.columns(min(total_metrics, 4))  # Limit to 4 columns for layout readability
+        self._display_kpis(category_counts, missing_counts)
+        self._display_visualizations(results.discrepancies)
+        self._setup_filtering_sidebar()
+        self._display_data_table(results.discrepancies)
+        self._setup_export(results)
 
-    # ✅ Display each category dynamically
-    i = 0
-    kpi_columns[i % len(kpi_columns)].metric("🔍 Total Discrepancies", len(filtered_results))
-    i += 1
-    for category, count in category_counts.items():
-        kpi_columns[i % len(kpi_columns)].metric(f"{category}", count)
-        i += 1
+    def _calculate_missing_counts(self, df: pd.DataFrame) -> Dict:
+        return {
+            "baseline": (df["Rule Type"] == "Missing in Baseline").sum(),
+            "candidate": (df["Rule Type"] == "Missing in Candidate").sum()
+        }
 
-    kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Baseline", missing_baseline_count)
-    i += 1
-    kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Candidate", missing_candidate_count)
+    def _display_kpis(self, category_counts: Dict, missing_counts: Dict) -> None:
+        total_metrics = len(category_counts) + 3
+        kpi_columns = st.columns(min(total_metrics, 4))
 
-    # ✅ Extract unique categories dynamically
-    unique_categories = filtered_results["Category"].unique()
-    # ✅ Generate distinct colors dynamically using Plotly's color palette
-    color_palette = plotly.colors.qualitative.Set1  # Choose a color set
-    color_map = {category: color_palette[i % len(color_palette)] for i, category in enumerate(unique_categories)}
-    # ✅ Count discrepancies per column and category
-    discrepancy_counts = filtered_results.groupby(["Column Name", "Category"]).size().reset_index(name="Count")
-    # ✅ Bar Chart: Count of Discrepancies by Column
-    st.header("📊 Discrepancy Analysis")
-    fig = px.bar(
-        discrepancy_counts,
-        x="Column Name",
-        y="Count",
-        color="Category",
-        title="Discrepancies by Column",
-        barmode="group",
-        color_discrete_map=color_map  # ✅ Now dynamically generated
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        for idx, (category, count) in enumerate(category_counts.items()):
+            kpi_columns[idx % 4].metric(f"{category}", count)
 
+        kpi_columns[-2].metric("Missing in Baseline", missing_counts["baseline"])
+        kpi_columns[-1].metric("Missing in Candidate", missing_counts["candidate"])
 
-    # ✅ **Pie Chart: Category Distribution**
-    st.header("Discrepancy Distribution")
-    pie_chart = px.pie(filtered_results, names="Category", title="Proportion of Discrepancy Types", hole=0.4)
-    st.plotly_chart(pie_chart, use_container_width=True)
+    def _display_visualizations(self, df: pd.DataFrame) -> None:
+        st.header("📊 Discrepancy Analysis")
+        
+        # Optimize groupby operation for large datasets
+        discrepancy_counts = df.groupby(["Column Name", "Category"], observed=True).size().reset_index(name="Count")
+        
+        # Generate color map for consistent visualization
+        unique_categories = df["Category"].unique()
+        color_map = {category: self.color_palette[i % len(self.color_palette)] 
+                    for i, category in enumerate(unique_categories)}
 
-    # ✅ **Filtered Data Table Based on Selected Column**
-    st.header("Discrepancy Details")
-    st.dataframe(filtered_results)
+        fig_bar = px.bar(
+            discrepancy_counts,
+            x="Column Name",
+            y="Count",
+            color="Category",
+            title="Discrepancies by Column",
+            barmode="group",
+            color_discrete_map=color_map
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
 
+        fig_pie = px.pie(
+            df,
+            names="Category",
+            title="Proportion of Discrepancy Types",
+            hole=0.4,
+            color="Category",
+            color_discrete_map=color_map
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    def _setup_filtering_sidebar(self) -> None:
+        st.sidebar.header("🔍 Filter Rules")
+        
+        rules_config = st.session_state.state.rules_config
+        selected_filters = st.session_state.state.selected_filters or {}
+
+        for rule in rules_config.get("rules", []):
+            rule_number = rule.get("Rule Number", "Unknown Rule")
+            rule_type = rule.get("type", "Unknown Type")
+            rule_columns = ", ".join(rule.get("columns", []))
+
+            st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
+            st.sidebar.write(f"📝 Columns: {rule_columns}")
+
+            selected_filters.setdefault(rule_number, {})
+
+            for key, value in rule.items():
+                if isinstance(value, (int, float, dict)):
+                    if isinstance(value, dict):
+                        for sub_key, sub_value in value.items():
+                            input_key = f"{key}_{sub_key}"
+                            prev_value = selected_filters[rule_number].get(input_key, sub_value)
+                            new_value = st.sidebar.number_input(
+                                f"{key} ({sub_key}) for {rule_number}",
+                                value=prev_value,
+                                key=f"{rule_number}_{input_key}"
+                            )
+                            selected_filters[rule_number][input_key] = new_value
+                    else:
+                        prev_value = selected_filters[rule_number].get(key, value)
+                        new_value = st.sidebar.number_input(
+                            f"{key} for {rule_number}",
+                            value=prev_value,
+                            key=f"{rule_number}_{key}"
+                        )
+                        selected_filters[rule_number][key] = new_value
+
+        if st.sidebar.button("📌 Apply Filters"):
+            st.session_state.state.selected_filters = selected_filters
+            self.rerun_comparison()
+
+        if st.sidebar.button("♻️ Reset Filters"):
+            st.session_state.state.selected_filters = None
+            self.rerun_comparison()
+
+    def _display_data_table(self, df: pd.DataFrame) -> None:
+        st.header("Discrepancy Details")
+        st.dataframe(df)
+
+    def _setup_export(self, results: ComparisonResult) -> None:
+        if not results.discrepancies.empty:
+            export_format = self._get_export_format()
+            filename = self._generate_filename(export_format)
+            export_data = self._prepare_export_data(results.discrepancies, export_format)
+            
+            st.download_button(
+                label="📥 Download Report",
+                data=export_data,
+                file_name=filename,
+                mime=self._get_mime_type(export_format)
+            )
+
+    def _get_export_format(self) -> str:
+        job_response = st.session_state.state.job_response
+        return job_response.get("report", {}).get("format", "CSV").upper()
+
+    def _generate_filename(self, format: str) -> str:
+        job_response = st.session_state.state.job_response
+        baseline_env = job_response["baseline"]["env"]
+        candidate_env = job_response["candidate"]["env"]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        return f"discrepancy_report_{baseline_env}_{candidate_env}_{timestamp}.{format.lower()}"
+
+    def _prepare_export_data(self, df: pd.DataFrame, format: str) -> bytes:
+        if format == "CSV":
+            return df.to_csv(index=False).encode("utf-8")
+        elif format == "EXCEL":
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                df.to_excel(writer, index=False)
+            return output.getvalue()
+        elif format == "JSON":
+            return df.to_json(orient="records", indent=4).encode("utf-8")
+        return df.to_csv(index=False).encode("utf-8")
+
+    def _get_mime_type(self, format: str) -> str:
+        mime_types = {
+            "CSV": "text/csv",
+            "EXCEL": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "JSON": "application/json"
+        }
+        return mime_types.get(format, "text/csv")
+
+    def rerun_comparison(self) -> None:
+        if hasattr(st.session_state.state, 'comparison_results'):
+            st.rerun()
+
+if __name__ == "__main__":
+    dashboard = DiscrepancyDashboard()
+    dashboard.run()
