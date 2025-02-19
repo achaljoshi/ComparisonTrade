@@ -1,0 +1,27 @@
+{
+    "validation_rules": {
+        "messageGroup": {"type": "integer", "required": true, "range": [1,100]},
+        "messageId": {"type": "integer", "required": true, "unique": true},
+        "timestamp": {"type": "integer", "required": true},
+        "id": {"type": "integer", "required": true, "unique": true},
+        "name": {"type": "string", "required": true},
+        "exchangeId": {"type": "integer", "required": true},
+        "marketId": {"type": "integer", "required": true},
+        "instrumentGroupId": {"type": "integer", "required": true},
+        "modifier": {"type": "integer", "required": true},
+        "underlyingId": {"type": "integer", "required": true},
+        "strikePrice": {"type": "integer", "required": true},
+        "expirationDate": {"type": "integer", "required": true},
+        "currency": {"type": "string", "required": true, "allowed_values": ["AUD", "USD", "EUR"]},
+        "currencyUnit": {"type": "integer", "required": true, "range": [1,10]},
+        "priceUnit": {"type": "integer", "required": true},
+        "active": {"type": "boolean", "required": true}
+    },
+    "discrepancy_detection": {
+        "duplicate_check": ["id", "messageId", "isinCode"],
+        "consistency_checks": {
+            "underlyingName": {"should_match": "name"},
+            "contractName": {"should_contain": "name"}
+        }
+    }
+}

@@ -29,7 +29,7 @@ class DataProcessor:
                 self.rules_config = json.load(file)
         else:
             self.rules_config = rules_config  # Assume it's already a dictionary
-    
+            
     def run_comparison(self, baseline_file, candidate_file, file_type="Excel", filters=None):
         """Run the discrepancy check process."""
         if isinstance(baseline_file, BytesIO):
@@ -85,13 +85,33 @@ class DataProcessor:
 
         return input_file_baseline, input_file_candidate, output_file_result
 
-    
     def read_text_file(self, file_path: Path) -> pd.DataFrame:
-        """Read a text file based on delimiter and header settings."""
-        delimiter = self.rules_config.get("text_file_delimiter", ",")
-        header = 0 if self.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
-        
-        return pd.read_csv(file_path, delimiter=delimiter, header=header)
+        """Parse a custom key-value format text file into a DataFrame."""
+        with open(file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+
+        # Extract individual records using regex for blocks within curly braces
+        records = re.findall(r'\{([^}]*)\}', content, re.DOTALL)
+
+        # Parse key-value pairs within each record
+        parsed_data = []
+        for record in records:
+            data = {}
+            pairs = re.findall(r'(\w+)\s*=\s*([^\n]+)', record)
+            for key, value in pairs:
+                value = value.strip()
+                if value.isdigit():
+                    data[key] = int(value)
+                elif value.lower() in ['true', 'false']:
+                    data[key] = value.lower() == 'true'
+                elif re.match(r'^\d+\.\d+$', value):
+                    data[key] = float(value)
+                else:
+                    data[key] = value.strip('"').strip()
+            parsed_data.append(data)
+
+        df = pd.DataFrame(parsed_data)
+        return df.astype(str) 
     
     def read_dd_file(self, file_path: Path) -> pd.DataFrame:
         """Read a DD file (.log or .csv) with appropriate delimiters."""
@@ -131,16 +151,24 @@ class DataProcessor:
         df_prod.columns = df_prod.columns.str.strip()
         df_qa.columns = df_qa.columns.str.strip()
 
-        key_column = self.rules_config["identifier"]
+        key_column = self.rules_config.get("identifier", "id")
 
         if key_column not in df_prod.columns or key_column not in df_qa.columns:
-            raise ValueError(f"Key identifier '{key_column}' not found in both datasets.")
+            print(f"Warning: Key identifier '{key_column}' not found in both datasets. Using 'id' as fallback.")
+            key_column = "id"
+
+        # ✅ Add placeholder 'id' column if missing
+        if key_column not in df_prod.columns:
+            df_prod[key_column] = range(1, len(df_prod) + 1)
+            print(f"Added placeholder '{key_column}' column to baseline data.")
+
+        if key_column not in df_qa.columns:
+            df_qa[key_column] = range(1, len(df_qa) + 1)
+            print(f"Added placeholder '{key_column}' column to candidate data.")
 
         df_merged = df_prod.merge(
             df_qa, on=key_column, suffixes=("_baseline", "_candidate"), how="outer", indicator=True
         )
-
-        df_merged = df_merged[df_merged["_merge"] == "both"]
 
         # ✅ Identify Missing Rows Before Applying Rules
         extra_rows_candidate = df_qa[~df_qa[key_column].isin(df_prod[key_column])]
@@ -149,65 +177,25 @@ class DataProcessor:
         discrepancies = []
 
         # ✅ Apply Filters Dynamically If Provided
-        for rule in self.rules_config["rules"]:
+        for rule in self.rules_config.get("rules", []):
             rule_number = rule.get("Rule Number", "N/A")
-            rule_type = rule["type"]
-            rule_description = rule["description"]
+            rule_type = rule.get("type", "unknown")
+            rule_description = rule.get("description", "")
 
-            # ✅ Fetch updated filter values or use default values from rules_config
-            updated_acceptable = filters.get(rule_number, {}).get("acceptable", rule.get("acceptable", 0))
-            updated_warning_min = filters.get(rule_number, {}).get("warning_min", rule.get("warning", {}).get("min", updated_acceptable))
-            updated_warning_max = filters.get(rule_number, {}).get("warning_max", rule.get("warning", {}).get("max", float("inf")))
-            updated_fatal_min = filters.get(rule_number, {}).get("fatal_min", rule.get("fatal", {}).get("min", float("inf")))
-            updated_threshold = filters.get(rule_number, {}).get("threshold", rule.get("threshold", 0.1))
-            updated_days = filters.get(rule_number, {}).get("days", rule.get("days", 0))
-
-            for col in rule["columns"]:
+            for col in rule.get("columns", []):
                 col_baseline = f"{col}_baseline"
                 col_candidate = f"{col}_candidate"
 
                 if col_baseline in df_merged.columns and col_candidate in df_merged.columns:
-                    df_merged["rule_violation"] = 0
                     df_merged["classification"] = "ACCEPTABLE"
-                    is_string_column = df_merged[col_baseline].dtype == object or df_merged[col_candidate].dtype == object
-                    has_only_category = "Category" in rule and not any(k in rule for k in ["threshold", "acceptable", "warning", "fatal", "days"])
+                    df_merged["rule_violation"] = abs(
+                        pd.to_numeric(df_merged[col_candidate], errors="coerce") -
+                        pd.to_numeric(df_merged[col_baseline], errors="coerce")
+                    )
 
-                    # ✅ Apply Tolerance Rules
-                    if "acceptable" in rule or "warning" in rule or "fatal" in rule:
-                        df_merged["rule_violation"] = abs(pd.to_numeric(df_merged[col_candidate], errors="coerce") - pd.to_numeric(df_merged[col_baseline], errors="coerce"))
-                        df_merged.loc[df_merged["rule_violation"] >= updated_fatal_min, "classification"] = "FATAL"
-                        df_merged.loc[(df_merged["rule_violation"] >= updated_warning_min) & (df_merged["rule_violation"] < updated_warning_max), "classification"] = "WARNING"
+                    df_merged.loc[df_merged["rule_violation"] > 0, "classification"] = "VIOLATION"
 
-                    # ✅ Apply Threshold Rules
-                    elif "threshold" in rule:
-                        df_merged["rule_violation"] = abs(pd.to_numeric(df_merged[col_candidate], errors="coerce") - pd.to_numeric(df_merged[col_baseline], errors="coerce")) >= updated_threshold
-                        df_merged.loc[df_merged["rule_violation"], "classification"] = rule.get("Category", "None")
-
-                    # ✅ Apply Date Rules
-                    elif any("date" in col.lower() for col in rule["columns"]) or any(pd.api.types.is_datetime64_any_dtype(df_merged[col_baseline]) for col in rule["columns"]):
-                        # ✅ Convert to date only (drop time part)
-                        df_merged[col_baseline] = pd.to_datetime(df_merged[col_baseline], errors="coerce").dt.date
-                        df_merged[col_candidate] = pd.to_datetime(df_merged[col_candidate], errors="coerce").dt.date
-                        df_merged["Trade_Date_Diff"] = (pd.to_datetime(df_merged[col_candidate]) - pd.to_datetime(df_merged[col_baseline])).dt.days
-                        df_merged["Trade_Date_Diff"] = df_merged["Trade_Date_Diff"].fillna(0).astype(int)
-                        df_merged.loc[df_merged["Trade_Date_Diff"].abs() > updated_days, "classification"] = rule.get("Category", "None")
-                    # elif any("date" in col.lower() for col in rule["columns"]) or any(pd.api.types.is_datetime64_any_dtype(df_merged[col_baseline]) for col in rule["columns"]):
-                    #     df_merged["Trade_Date_Diff"] = (df_merged[col_candidate] - df_merged[col_baseline]).dt.days
-                    #     df_merged["Trade_Date_Diff"] = df_merged["Trade_Date_Diff"].fillna(0).astype(int)
-                    #     df_merged.loc[df_merged["Trade_Date_Diff"].abs() > updated_days, "classification"] = rule.get("Category", "None")
-                    
-                    elif rule_type == "ignore_differences":
-                        continue
-                    elif is_string_column and has_only_category:
-                        category = rule.get("Category", "None")
-                        df_merged[col_baseline] = df_merged[col_baseline].astype(str).str.strip()
-                        df_merged[col_candidate] = df_merged[col_candidate].astype(str).str.strip()
-
-                        df_merged["String_Mismatch"] = df_merged.apply(lambda row: row[col_baseline] != row[col_candidate], axis=1)
-                        df_merged.loc[df_merged["String_Mismatch"], "classification"] = rule.get("Category", "None")
-
-                    # ✅ Collect Discrepancies
-                    for _, row in df_merged[df_merged["classification"] != "ACCEPTABLE"].iterrows():
+                    for _, row in df_merged[df_merged["classification"] == "VIOLATION"].iterrows():
                         discrepancies.append({
                             key_column: row[key_column],
                             "Column Name": col,
