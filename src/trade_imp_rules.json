@@ -1,0 +1,1204 @@
+{"rules":{
+    "tradeTime": [
+        {
+            "type": "Date check",
+            "Rule Number": "1",
+            "columns": [
+                "tradeTime"
+            ],
+            "description": "The tradeTime must be a valid timestamp in UTC.",
+            "format": "UTC time"
+        },
+        {
+            "type": "String check",
+            "Rule Number": "2",
+            "columns": [
+                "tradeTime"
+            ],
+            "description": "The tradeTime must be in ASCII format.",
+            "format": "ASCII"
+        },
+        {
+            "type": "Format check",
+            "Rule Number": "3",
+            "columns": [
+                "tradeTime"
+            ],
+            "description": "The tradeTime must follow the format HHMMSS.",
+            "format": "HHMMSS"
+        }
+    ],
+    "orderBookId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "orderBookId"
+            ],
+            "description": "The orderBookId must be a positive integer.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Existence check",
+            "Rule Number": "2",
+            "columns": [
+                "orderBookId"
+            ],
+            "description": "The orderBookId must be present in the system and correspond to an existing order book.",
+            "relations": [
+                "upperLevelOrderBookId"
+            ]
+        }
+    ],
+    "userId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "userId"
+            ],
+            "description": "The userId must be a positive integer.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Uniqueness check",
+            "Rule Number": "2",
+            "columns": [
+                "userId"
+            ],
+            "description": "The userId must be unique and unchanged as long as the user exists in the reference data.",
+            "relations": [
+                "userName"
+            ]
+        },
+        {
+            "type": "Existence check",
+            "Rule Number": "3",
+            "columns": [
+                "userId"
+            ],
+            "description": "The userId must exist in the reference data.",
+            "relations": [
+                "userName"
+            ]
+        }
+    ],
+    "participantId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "participantId"
+            ],
+            "description": "Ensure participantId is a positive integer.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Uniqueness check",
+            "Rule Number": "2",
+            "columns": [
+                "participantId"
+            ],
+            "description": "Ensure participantId is unique and unchanged as long as the participant exists in the reference data.",
+            "relations": [
+                "participantName"
+            ]
+        },
+        {
+            "type": "Existence check",
+            "Rule Number": "3",
+            "columns": [
+                "participantId"
+            ],
+            "description": "Ensure participantId exists in the reference data before processing.",
+            "relations": [
+                "participantName"
+            ]
+        }
+    ],
+    "orderId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "orderId"
+            ],
+            "description": "The orderId must be a unique identifier for the order.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Uniqueness check",
+            "Rule Number": "2",
+            "columns": [
+                "orderId"
+            ],
+            "description": "The orderId must be globally unique and should never be reused.",
+            "format": "Long"
+        }
+    ],
+    "quoteMessageId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "quoteMessageId"
+            ],
+            "description": "The quoteMessageId must be a valid integer.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Existence check",
+            "Rule Number": "2",
+            "columns": [
+                "quoteMessageId"
+            ],
+            "description": "The quoteMessageId must be present in the Quoting Responsibility message.",
+            "relations": [
+                "id"
+            ]
+        }
+    ],
+    "matchId.matchGroupId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "matchId.matchGroupId"
+            ],
+            "description": "The matchGroupId must be a monotonically increasing number per partition, assigned to an execution event.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Presence check",
+            "Rule Number": "2",
+            "columns": [
+                "matchId.matchGroupId"
+            ],
+            "description": "The matchGroupId must be present if the preceding boolean is set to true.",
+            "relations": [
+                "preceding boolean"
+            ]
+        }
+    ],
+    "matchId.notUsed": [
+        {
+            "type": "String check",
+            "Rule Number": "1",
+            "columns": [
+                "matchId"
+            ],
+            "description": "The matchId must be a non-empty string.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "string"
+        },
+        {
+            "type": "String check",
+            "Rule Number": "2",
+            "columns": [
+                "matchId"
+            ],
+            "description": "The matchId should be unique within the context of a transaction.",
+            "relations": [
+                "transactionId"
+            ]
+        }
+    ],
+    "matchId.combinationMatchId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "combinationMatchId"
+            ],
+            "description": "The combinationMatchId must be a sequential number of an execution sequence number.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Presence check",
+            "Rule Number": "2",
+            "columns": [
+                "combinationMatchId"
+            ],
+            "description": "The combinationMatchId field must be present if the preceding boolean is set to true.",
+            "relations": [
+                "preceding boolean"
+            ]
+        }
+    ],
+    "orderPrice": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "orderPrice"
+            ],
+            "description": "The order price must be a valid numerical value.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Dependency check",
+            "Rule Number": "2",
+            "columns": [
+                "orderPrice",
+                "priceLimitsReferencePrice"
+            ],
+            "description": "The order price must be within the static price limits reference price.",
+            "relations": [
+                "priceLimitsReferencePrice"
+            ]
+        },
+        {
+            "type": "Dependency check",
+            "Rule Number": "3",
+            "columns": [
+                "orderPrice",
+                "circuitBreakerLimitsReferencePrice"
+            ],
+            "description": "The order price must be within the circuit breaker limits reference price.",
+            "relations": [
+                "circuitBreakerLimitsReferencePrice"
+            ]
+        }
+    ],
+    "tradePrice": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "tradePrice"
+            ],
+            "description": "The trade price must be a valid numerical value.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Dependency check",
+            "Rule Number": "2",
+            "columns": [
+                "tradePrice"
+            ],
+            "description": "The trade price must be present if a trade is executed.",
+            "relations": [
+                "quantity",
+                "side"
+            ]
+        }
+    ],
+    "averagePrice": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "averagePrice"
+            ],
+            "description": "The average price must be a positive numerical value.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Format check",
+            "Rule Number": "2",
+            "columns": [
+                "averagePrice"
+            ],
+            "description": "The average price should be in a long integer format.",
+            "format": "Long"
+        }
+    ],
+    "quantity": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "orderQuantity",
+                "tradedQuantity"
+            ],
+            "description": "The quantity must be a positive integer.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "integer"
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "2",
+            "columns": [
+                "leavesQuantity"
+            ],
+            "description": "The leaves quantity must be a non-negative integer.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "integer"
+        },
+        {
+            "type": "Relation check",
+            "Rule Number": "3",
+            "columns": [
+                "orderQuantity",
+                "leavesQuantity"
+            ],
+            "description": "The leaves quantity must be less than or equal to the order quantity.",
+            "relations": [
+                "orderQuantity"
+            ]
+        },
+        {
+            "type": "Update check",
+            "Rule Number": "4",
+            "columns": [
+                "orderQuantity"
+            ],
+            "description": "When an order is updated, the new quantity must be greater than or equal to the traded quantity.",
+            "relations": [
+                "tradedQuantity"
+            ]
+        }
+    ],
+    "side": [
+        {
+            "type": "Value check",
+            "Rule Number": "1",
+            "columns": [
+                "side"
+            ],
+            "description": "The 'side' parameter must have a valid value as defined in the specification.",
+            "valid_values": [
+                "0",
+                "1",
+                "2"
+            ]
+        },
+        {
+            "type": "Default value check",
+            "Rule Number": "2",
+            "columns": [
+                "side"
+            ],
+            "description": "If the 'side' parameter is not provided, it should default to '0' (Undefined).",
+            "default_value": "0"
+        }
+    ],
+    "dealSource": [
+        {
+            "type": "Valid Values Check",
+            "Rule Number": "DS001",
+            "columns": [
+                "dealSource"
+            ],
+            "description": "Specifies under which circumstances the deal was made, such as in continuous matching or in the opening auction.",
+            "valid_values": [
+                "Continuous matching",
+                "Opening auction",
+                "Other specified circumstances"
+            ]
+        },
+        {
+            "type": "Data Type Check",
+            "Rule Number": "DS002",
+            "columns": [
+                "dealSource"
+            ],
+            "description": "Ensures that the dealSource field is of type Short.",
+            "constraints": {
+                "min": -32768,
+                "max": 32767
+            }
+        }
+    ],
+    "tradeType": [
+        {
+            "type": "Value check",
+            "Rule Number": "1",
+            "columns": [
+                "tradeType"
+            ],
+            "description": "The tradeType field must be a byte value representing the status of the trade.",
+            "valid_values": [
+                "Standard",
+                "Reversing",
+                "Overtaking"
+            ]
+        },
+        {
+            "type": "Range check",
+            "Rule Number": "2",
+            "columns": [
+                "tradeType"
+            ],
+            "description": "The tradeType field must be within the valid byte range.",
+            "constraints": {
+                "min": 0,
+                "max": 255
+            }
+        }
+    ],
+    "passiveAggressive": [
+        {
+            "type": "String check",
+            "Rule Number": "1",
+            "columns": [
+                "orderStatus"
+            ],
+            "description": "The orderStatus must be one of the predefined acceptable values.",
+            "valid_values": [
+                "Incoming (2)",
+                "Active (1)",
+                "Canceled (2)",
+                "Untriggered (3)"
+            ],
+            "default_value": "Incoming (2)"
+        },
+        {
+            "type": "String check",
+            "Rule Number": "2",
+            "columns": [
+                "changeReason"
+            ],
+            "description": "The changeReason must be one of the predefined acceptable values.",
+            "valid_values": [
+                "New (6)",
+                "Trade (3)",
+                "Updated (5)",
+                "Triggered (12)"
+            ],
+            "default_value": "New (6)"
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "3",
+            "columns": [
+                "orderQuantity"
+            ],
+            "description": "The orderQuantity must be a positive integer.",
+            "constraints": {
+                "min": 1
+            }
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "4",
+            "columns": [
+                "leavesQuantity"
+            ],
+            "description": "The leavesQuantity must be a non-negative integer and less than or equal to orderQuantity.",
+            "constraints": {
+                "min": 0
+            }
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "5",
+            "columns": [
+                "price"
+            ],
+            "description": "The price must be a positive number.",
+            "constraints": {
+                "min": 0.01
+            }
+        }
+    ],
+    "accountId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "accountId"
+            ],
+            "description": "The accountId must be a positive integer.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Uniqueness check",
+            "Rule Number": "2",
+            "columns": [
+                "accountId"
+            ],
+            "description": "The accountId must be unique and unchanged as long as the account exists in the reference data.",
+            "relations": [
+                "accountId"
+            ]
+        },
+        {
+            "type": "Existence check",
+            "Rule Number": "3",
+            "columns": [
+                "accountId"
+            ],
+            "description": "The accountId must exist in the reference data.",
+            "relations": [
+                "accountId"
+            ]
+        }
+    ],
+    "exchangeInfo": [
+        {
+            "type": "String check",
+            "Rule Number": "1",
+            "columns": [
+                "exchangeInfo"
+            ],
+            "description": "The exchangeInfo field contains exchange-specific information that can be entered with the order.",
+            "format": "Char[]"
+        },
+        {
+            "type": "Dependency check",
+            "Rule Number": "2",
+            "columns": [
+                "exchangeInfo"
+            ],
+            "description": "The content of the exchangeInfo field should align with the details specified in the Nasdaq OMN Interface Message Reference.",
+            "relations": [
+                "Nasdaq OMN Interface Message Reference"
+            ]
+        }
+    ],
+    "customerInfo": [
+        {
+            "type": "String check",
+            "Rule Number": "1",
+            "columns": [
+                "participantName"
+            ],
+            "description": "The participantName must be unique and unchanged as long as the participant exists in the reference data.",
+            "constraints": {},
+            "format": "String",
+            "relations": [],
+            "valid_values": [],
+            "default_value": "",
+            "tolerance": {},
+            "exclusions": []
+        },
+        {
+            "type": "Boolean check",
+            "Rule Number": "2",
+            "columns": [
+                "active"
+            ],
+            "description": "Specifies if the participant is active or suspended.",
+            "constraints": {},
+            "format": "Boolean",
+            "relations": [],
+            "valid_values": [
+                "true",
+                "false"
+            ],
+            "default_value": "",
+            "tolerance": {},
+            "exclusions": []
+        },
+        {
+            "type": "String check",
+            "Rule Number": "3",
+            "columns": [
+                "clearingHouseId"
+            ],
+            "description": "Clearing House ID for the participant.",
+            "constraints": {},
+            "format": "String",
+            "relations": [],
+            "valid_values": [],
+            "default_value": "",
+            "tolerance": {},
+            "exclusions": []
+        },
+        {
+            "type": "String check",
+            "Rule Number": "4",
+            "columns": [
+                "organisationNumber"
+            ],
+            "description": "Participant\u2019s organization number.",
+            "constraints": {},
+            "format": "String",
+            "relations": [],
+            "valid_values": [],
+            "default_value": "",
+            "tolerance": {},
+            "exclusions": []
+        },
+        {
+            "type": "List check",
+            "Rule Number": "5",
+            "columns": [
+                "clearingParticipants"
+            ],
+            "description": "List of valid clearing customers, which consist of the following fields: id (Char[]), name (String). The default clearing customer is always the last clearing customer in the list.",
+            "constraints": {},
+            "format": "List",
+            "relations": [],
+            "valid_values": [],
+            "default_value": "",
+            "tolerance": {},
+            "exclusions": []
+        }
+    ],
+    "yieldOrPrice": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "yieldOrPrice"
+            ],
+            "description": "The yield or price must be a valid numerical value.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Format check",
+            "Rule Number": "2",
+            "columns": [
+                "yieldOrPrice"
+            ],
+            "description": "The yield or price should be represented as a long integer.",
+            "format": "Long"
+        },
+        {
+            "type": "Dependency check",
+            "Rule Number": "3",
+            "columns": [
+                "yieldOrPrice"
+            ],
+            "description": "The yield or price is used in conjunction with other financial parameters such as referencePrice and priceLimitsReferencePrice.",
+            "relations": [
+                "referencePrice",
+                "priceLimitsReferencePrice"
+            ]
+        }
+    ],
+    "accruedInterest": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "couponInterest"
+            ],
+            "description": "The interest rate of the bond with 6 implicit decimals must be a valid long integer.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Date check",
+            "Rule Number": "2",
+            "columns": [
+                "datedDate"
+            ],
+            "description": "The date on which the coupon interest will begin to accrue for a bond must be a valid UTC timestamp.",
+            "format": "Unix timestamp"
+        },
+        {
+            "type": "Value check",
+            "Rule Number": "3",
+            "columns": [
+                "dayCountConvention"
+            ],
+            "description": "The day count convention used for calculating accrued interest must be a valid byte value.",
+            "valid_values": [
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9"
+            ]
+        }
+    ],
+    "giveUpParticipant": [
+        {
+            "type": "String check",
+            "Rule Number": "1",
+            "columns": [
+                "giveUpParticipant"
+            ],
+            "description": "The giveUpParticipant field must be a valid string identifier.",
+            "format": "fixed-length string"
+        },
+        {
+            "type": "Valid values check",
+            "Rule Number": "2",
+            "columns": [
+                "giveUpParticipant"
+            ],
+            "description": "The giveUpParticipant field must contain one of the predefined acceptable values.",
+            "valid_values": [
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9"
+            ]
+        }
+    ],
+    "originalTrade": [
+        {
+            "type": "String check",
+            "Rule Number": "1",
+            "columns": [
+                "updatedTimestamp"
+            ],
+            "description": "The updatedTimestamp must be a valid time in ASCII format.",
+            "format": "HHMMSS",
+            "constraints": {},
+            "relations": [],
+            "valid_values": [],
+            "default_value": null,
+            "tolerance": {},
+            "exclusions": []
+        },
+        {
+            "type": "Value check",
+            "Rule Number": "2",
+            "columns": [
+                "reason"
+            ],
+            "description": "The reason field must contain a valid byte value indicating the reason why the Price Information Message was sent.",
+            "constraints": {},
+            "relations": [],
+            "valid_values": [
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7"
+            ],
+            "default_value": null,
+            "tolerance": {},
+            "exclusions": []
+        },
+        {
+            "type": "Value check",
+            "Rule Number": "3",
+            "columns": [
+                "trendIndicator"
+            ],
+            "description": "The trendIndicator must be one of the predefined characters indicating the trend of the latest price compared to the previous one.",
+            "constraints": {},
+            "relations": [],
+            "valid_values": [
+                "+",
+                "-",
+                "=",
+                "<null>"
+            ],
+            "default_value": null,
+            "tolerance": {},
+            "exclusions": []
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "4",
+            "columns": [
+                "extendedLastPrice"
+            ],
+            "description": "The extendedLastPrice must be a valid long integer representing the last trade price during the day in extended price format.",
+            "constraints": {
+                "min": 0
+            },
+            "relations": [],
+            "valid_values": [],
+            "default_value": null,
+            "tolerance": {},
+            "exclusions": []
+        }
+    ],
+    "tradeReportCode": [
+        {
+            "type": "Byte check",
+            "Rule Number": "TRC-001",
+            "columns": [
+                "tradeReportCode"
+            ],
+            "description": "The tradeReportCode must be a byte value.",
+            "constraints": {
+                "min": 0,
+                "max": 255
+            }
+        },
+        {
+            "type": "Applicability check",
+            "Rule Number": "TRC-002",
+            "columns": [
+                "tradeReportCode"
+            ],
+            "description": "The tradeReportCode is only applicable for trade reports.",
+            "exclusions": [
+                "If the message is not a trade report"
+            ]
+        }
+    ],
+    "reportTime": [
+        {
+            "type": "Date check",
+            "Rule Number": "1",
+            "columns": [
+                "reportTime"
+            ],
+            "description": "The reportTime field must be a valid timestamp indicating when the trade was reported.",
+            "format": "Unix timestamp"
+        },
+        {
+            "type": "Dependency check",
+            "Rule Number": "2",
+            "columns": [
+                "reportTime"
+            ],
+            "description": "The reportTime field is only applicable for trade reports.",
+            "relations": [
+                "tradeReportCode"
+            ]
+        }
+    ],
+    "extendedPrice": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "extendedLastPrice"
+            ],
+            "description": "The last trade price during the day in extended price format must be a valid long integer.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Format check",
+            "Rule Number": "2",
+            "columns": [
+                "extendedLastPrice"
+            ],
+            "description": "The extendedLastPrice must be in a valid numerical format.",
+            "format": "Long"
+        }
+    ],
+    "shortSellQuantity": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "quantity"
+            ],
+            "description": "The quantity must be a non-negative integer.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "2",
+            "columns": [
+                "quantity"
+            ],
+            "description": "The quantity must be within the acceptable range for market transactions.",
+            "constraints": {
+                "min": 1,
+                "max": 1000000
+            },
+            "format": "Integer"
+        }
+    ],
+    "tradeSlipNumber": [
+        {
+            "type": "Format check",
+            "Rule Number": "1",
+            "columns": [
+                "tradeSlipNumber"
+            ],
+            "description": "The Trade Slip Number must follow the format 1DINNNNNNN where 1 is always set to '1', D is the last digit of the date calculated as the number of days since 31/12 of the previous year up to the current business date MOD 10, I is the running instance of the server, and NNNNNNN is a sequential number representing the deal.",
+            "format": "1DINNNNNNN"
+        },
+        {
+            "type": "Range check",
+            "Rule Number": "2",
+            "columns": [
+                "tradeSlipNumber"
+            ],
+            "description": "The sequential number NNNNNNN in the Trade Slip Number must range from 0000001 to 9999999 and reset to 0000001 every new business day.",
+            "constraints": {
+                "min": 1,
+                "max": 9999999
+            }
+        },
+        {
+            "type": "Date check",
+            "Rule Number": "3",
+            "columns": [
+                "tradeSlipNumber"
+            ],
+            "description": "The D component of the Trade Slip Number must be calculated as the number of days since 31/12 of the previous year up to the current business date MOD 10.",
+            "relations": [
+                "current business date"
+            ]
+        }
+    ],
+    "nationalBidPriceSnapshot": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "nationalBidPriceSnapshot"
+            ],
+            "description": "The national bid price snapshot must be a valid long integer representing the price.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Date check",
+            "Rule Number": "2",
+            "columns": [
+                "timestamp"
+            ],
+            "description": "The timestamp must be a valid long integer representing the time at which the message was sent in UTC.",
+            "format": "Long"
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "3",
+            "columns": [
+                "orderBookId"
+            ],
+            "description": "The orderBookId must be a valid integer representing the order book the limits are for.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Boolean check",
+            "Rule Number": "4",
+            "columns": [
+                "priceLimits"
+            ],
+            "description": "The priceLimits field must be a boolean indicating whether the price limits or circuit breaker limits are applied.",
+            "valid_values": [
+                true,
+                false
+            ]
+        },
+        {
+            "type": "Boolean check",
+            "Rule Number": "5",
+            "columns": [
+                "dynamic"
+            ],
+            "description": "The dynamic field must be a boolean indicating whether the limits are dynamic or static.",
+            "valid_values": [
+                true,
+                false
+            ]
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "6",
+            "columns": [
+                "upperLimit"
+            ],
+            "description": "The upperLimit must be a valid long integer representing the upper price limit.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "7",
+            "columns": [
+                "lowerLimit"
+            ],
+            "description": "The lowerLimit must be a valid long integer representing the lower price limit.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "8",
+            "columns": [
+                "referencePrice"
+            ],
+            "description": "The referencePrice must be a valid long integer representing the reference price used when calculating the limits.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        }
+    ],
+    "nationalOfferPriceSnapshot": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "nationalOfferPriceSnapshot"
+            ],
+            "description": "The national offer price snapshot must be a valid numerical value.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Date check",
+            "Rule Number": "2",
+            "columns": [
+                "timestamp"
+            ],
+            "description": "The timestamp must be a valid UTC time.",
+            "format": "Unix timestamp"
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "3",
+            "columns": [
+                "orderBookId"
+            ],
+            "description": "The orderBookId must be a valid integer representing the order book the limits are for.",
+            "constraints": {
+                "min": 1
+            },
+            "format": "Integer"
+        },
+        {
+            "type": "Boolean check",
+            "Rule Number": "4",
+            "columns": [
+                "priceLimits"
+            ],
+            "description": "The priceLimits field must be a boolean indicating if price limits or circuit breaker limits are applied.",
+            "valid_values": [
+                "true",
+                "false"
+            ]
+        },
+        {
+            "type": "Boolean check",
+            "Rule Number": "5",
+            "columns": [
+                "dynamic"
+            ],
+            "description": "The dynamic field must be a boolean indicating if the limits are dynamic or static.",
+            "valid_values": [
+                "true",
+                "false"
+            ]
+        },
+        {
+            "type": "Numerical check",
+            "Rule Number": "6",
+            "columns": [
+                "referencePrice"
+            ],
+            "description": "The referencePrice must be a valid numerical value used when calculating the limits.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        }
+    ],
+    "tradeCondition": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "TC-001",
+            "columns": [
+                "tradeCondition"
+            ],
+            "description": "The tradeCondition field must be an integer.",
+            "constraints": {
+                "min": null,
+                "max": null
+            }
+        },
+        {
+            "type": "Range check",
+            "Rule Number": "TC-002",
+            "columns": [
+                "tradeCondition"
+            ],
+            "description": "The tradeCondition field must be within the valid range of integer values.",
+            "constraints": {
+                "min": -2147483648,
+                "max": 2147483647
+            }
+        }
+    ],
+    "counterOrderCapacity": [
+        {
+            "type": "Valid Values Check",
+            "Rule Number": "1",
+            "columns": [
+                "counterOrderCapacity"
+            ],
+            "description": "Ensure that the counterOrderCapacity field contains only predefined acceptable values.",
+            "valid_values": [
+                "3",
+                "4",
+                "8",
+                "16",
+                "32",
+                "64"
+            ]
+        },
+        {
+            "type": "Default Value Check",
+            "Rule Number": "2",
+            "columns": [
+                "counterOrderCapacity"
+            ],
+            "description": "If the counterOrderCapacity field is not provided, it should default to '0'.",
+            "default_value": "0"
+        }
+    ]
+}
+}
