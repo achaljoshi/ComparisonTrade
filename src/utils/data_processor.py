@@ -85,14 +85,48 @@ class DataProcessor:
 
         return input_file_baseline, input_file_candidate, output_file_result
 
-    
     def read_text_file(self, file_path: Path) -> pd.DataFrame:
-        """Read a text file based on delimiter and header settings."""
-        delimiter = self.rules_config.get("text_file_delimiter", ",")
-        header = 0 if self.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
-        
-        return pd.read_csv(file_path, delimiter=delimiter, header=header)
-    
+       
+     records = []
+     current_record = {}
+     inside_record = False  # ✅ Track whether we're inside a `{}` block
+
+     with open(file_path, "r") as file:
+         for line in file:
+             line = line.strip()
+
+             # ✅ Start a new record
+             if line == "{":
+                 inside_record = True
+                 current_record = {}  # Start new record
+                 continue
+
+             # ✅ End of record
+             elif line == "}":
+                 inside_record = False
+                 if current_record:  # ✅ Store only non-empty records
+                     records.append(current_record)
+                 current_record = {}
+                 continue
+
+             # ✅ Extract key-value pairs correctly (only inside `{}` block)
+             if inside_record and "=" in line:
+                 key, value = map(str.strip, line.split("=", 1))
+                 current_record[key] = value
+
+     # ✅ Append last record if it exists
+     if current_record:
+         records.append(current_record)
+
+     # ✅ Convert parsed records to a DataFrame
+     df = pd.DataFrame(records)
+
+     # ✅ Debugging: Print parsed results
+     print("Parsed DataFrame:\n", df.head())
+     print("Columns after parsing:", df.columns.tolist())
+
+     return df
+
     def read_dd_file(self, file_path: Path) -> pd.DataFrame:
         """Read a DD file (.log or .csv) with appropriate delimiters."""
         if file_path.suffix.lower() == ".log":
@@ -115,143 +149,94 @@ class DataProcessor:
   
 
     def compare_files(self, df_baseline=None, df_candidate=None, file_type="Excel", filters=None):
-        """Compare Baseline and Candidate files using dynamically defined rules from rules_config.json."""
-        
-        if filters is None:
-            filters = {}
+      """Compare Baseline and Candidate files using dynamically defined rules from rules_config.json."""
 
-        # ✅ Load DataFrames from Uploaded Files
-        if df_baseline is not None and df_candidate is not None:
-            df_prod, df_qa = df_baseline.copy(), df_candidate.copy()
-        else:
-            input_file_baseline, input_file_candidate, _ = self.resolve_file_paths()
-            df_prod = self.read_file(Path(input_file_baseline), file_type)
-            df_qa = self.read_file(Path(input_file_candidate), file_type)
+      if filters is None:
+        filters = {}
 
-        df_prod.columns = df_prod.columns.str.strip()
-        df_qa.columns = df_qa.columns.str.strip()
+    
+      input_file_baseline, input_file_candidate, _ = self.resolve_file_paths()
+      df_baseline = self.read_text_file(input_file_baseline)
+      df_candidate = self.read_text_file(input_file_candidate)
 
-        key_column = self.rules_config["identifier"]
+      # ✅ Debugging: Print first few rows before processing
+      print("Baseline Data (Before Cleaning):\n", df_baseline.head())
+      print("Candidate Data (Before Cleaning):\n", df_candidate.head())
 
-        if key_column not in df_prod.columns or key_column not in df_qa.columns:
-            raise ValueError(f"Key identifier '{key_column}' not found in both datasets.")
+    # ✅ Ensure that rules_config is correctly loaded
+     # print("Rules Config Loaded:", json.dumps(self.rules_config, indent=4))
+      
+      if isinstance(self.rules_config, str):
+       print("🚨 ERROR: rules_config is a string instead of a dictionary! Decoding JSON...")
+       self.rules_config = json.loads(self.rules_config)
+       
+      if "rules" not in self.rules_config or not isinstance(self.rules_config["rules"], dict):
+       raise ValueError("Error: 'rules' key not found or incorrectly formatted in rules_config.json. Please check your config file.")
+      
+      key_column = "messageId" if "messageId" in self.rules_config["rules"] else None
+    
+      if not key_column:
+       raise ValueError("Error: 'messageId' key not found in rules_config.json under 'rules'. Please check your config file.")
 
-        df_merged = df_prod.merge(
-            df_qa, on=key_column, suffixes=("_baseline", "_candidate"), how="outer", indicator=True
-        )
+    # ✅ Strip and remove any leading/trailing spaces
+      df_baseline.columns = df_baseline.columns.astype(str).str.strip()
+      df_candidate.columns = df_candidate.columns.astype(str).str.strip()
 
-        df_merged = df_merged[df_merged["_merge"] == "both"]
+    # ✅ Debugging: Print column names after stripping
+      print("Baseline Columns after stripping:", df_baseline.columns.tolist())
+      print("Candidate Columns after stripping:", df_candidate.columns.tolist())
 
-        # ✅ Identify Missing Rows Before Applying Rules
-        extra_rows_candidate = df_qa[~df_qa[key_column].isin(df_prod[key_column])]
-        extra_rows_baseline = df_prod[~df_prod[key_column].isin(df_qa[key_column])]
+    # ✅ Ensure the key_column exists in both datasets
+      if key_column not in df_baseline.columns:
+        print(f"Error: Key identifier '{key_column}' is missing from the Baseline dataset. Columns found: {df_baseline.columns.tolist()}")
+        raise ValueError(f"Key identifier '{key_column}' not found in Baseline dataset.")
 
-        discrepancies = []
+      if key_column not in df_candidate.columns:
+        print(f"Error: Key identifier '{key_column}' is missing from the Candidate dataset. Columns found: {df_candidate.columns.tolist()}")
+        raise ValueError(f"Key identifier '{key_column}' not found in Candidate dataset.")
 
-        # ✅ Apply Filters Dynamically If Provided
-        for rule in self.rules_config["rules"]:
-            rule_number = rule.get("Rule Number", "N/A")
-            rule_type = rule["type"]
-            rule_description = rule["description"]
+      df_merged = df_baseline.merge(
+        df_candidate, on=key_column, suffixes=("_baseline", "_candidate"), how="outer", indicator=True
+    )
 
-            # ✅ Fetch updated filter values or use default values from rules_config
-            updated_acceptable = filters.get(rule_number, {}).get("acceptable", rule.get("acceptable", 0))
-            updated_warning_min = filters.get(rule_number, {}).get("warning_min", rule.get("warning", {}).get("min", updated_acceptable))
-            updated_warning_max = filters.get(rule_number, {}).get("warning_max", rule.get("warning", {}).get("max", float("inf")))
-            updated_fatal_min = filters.get(rule_number, {}).get("fatal_min", rule.get("fatal", {}).get("min", float("inf")))
-            updated_threshold = filters.get(rule_number, {}).get("threshold", rule.get("threshold", 0.1))
-            updated_days = filters.get(rule_number, {}).get("days", rule.get("days", 0))
+      discrepancies = []
+      extra_rows_candidate = df_candidate[~df_candidate[key_column].isin(df_baseline[key_column])]
+      extra_rows_baseline = df_baseline[~df_baseline[key_column].isin(df_candidate[key_column])]
 
-            for col in rule["columns"]:
-                col_baseline = f"{col}_baseline"
-                col_candidate = f"{col}_candidate"
+      for column_name, rules in self.rules_config["rules"].items():
+       for rule in rules:  # rules is a list, so iterate properly
+        if not isinstance(rule, dict):
+            raise ValueError(f"Error: Rule for column '{column_name}' is not formatted correctly. Expected dict, got {type(rule)}")
 
-                if col_baseline in df_merged.columns and col_candidate in df_merged.columns:
-                    df_merged["rule_violation"] = 0
-                    df_merged["classification"] = "ACCEPTABLE"
-                    is_string_column = df_merged[col_baseline].dtype == object or df_merged[col_candidate].dtype == object
-                    has_only_category = "Category" in rule and not any(k in rule for k in ["threshold", "acceptable", "warning", "fatal", "days"])
+        rule_number = rule.get("Rule Number", "N/A")  # ✅ Use .get() safely
+        rule_type = rule.get("type", "Unknown")  # ✅ Use .get() safely
+        rule_description = rule.get("description", "No description available")
 
-                    # ✅ Apply Tolerance Rules
-                    if "acceptable" in rule or "warning" in rule or "fatal" in rule:
-                        df_merged["rule_violation"] = abs(pd.to_numeric(df_merged[col_candidate], errors="coerce") - pd.to_numeric(df_merged[col_baseline], errors="coerce"))
-                        df_merged.loc[df_merged["rule_violation"] >= updated_fatal_min, "classification"] = "FATAL"
-                        df_merged.loc[(df_merged["rule_violation"] >= updated_warning_min) & (df_merged["rule_violation"] < updated_warning_max), "classification"] = "WARNING"
+        for col in rule.get("columns", []):  # ✅ Ensure columns exist
+            col_baseline = f"{col}_baseline"
+            col_candidate = f"{col}_candidate"
 
-                    # ✅ Apply Threshold Rules
-                    elif "threshold" in rule:
-                        df_merged["rule_violation"] = abs(pd.to_numeric(df_merged[col_candidate], errors="coerce") - pd.to_numeric(df_merged[col_baseline], errors="coerce")) >= updated_threshold
-                        df_merged.loc[df_merged["rule_violation"], "classification"] = rule.get("Category", "None")
+            if col_baseline in df_merged.columns and col_candidate in df_merged.columns:
+                df_merged["rule_violation"] = abs(
+                    pd.to_numeric(df_merged[col_candidate], errors="coerce") - 
+                    pd.to_numeric(df_merged[col_baseline], errors="coerce")
+                )
+                df_merged.loc[df_merged["rule_violation"] > 0, "classification"] = "DISCREPANCY"
 
-                    # ✅ Apply Date Rules
-                    elif any("date" in col.lower() for col in rule["columns"]) or any(pd.api.types.is_datetime64_any_dtype(df_merged[col_baseline]) for col in rule["columns"]):
-                        # ✅ Convert to date only (drop time part)
-                        df_merged[col_baseline] = pd.to_datetime(df_merged[col_baseline], errors="coerce").dt.date
-                        df_merged[col_candidate] = pd.to_datetime(df_merged[col_candidate], errors="coerce").dt.date
-                        df_merged["Trade_Date_Diff"] = (pd.to_datetime(df_merged[col_candidate]) - pd.to_datetime(df_merged[col_baseline])).dt.days
-                        df_merged["Trade_Date_Diff"] = df_merged["Trade_Date_Diff"].fillna(0).astype(int)
-                        df_merged.loc[df_merged["Trade_Date_Diff"].abs() > updated_days, "classification"] = rule.get("Category", "None")
-                    # elif any("date" in col.lower() for col in rule["columns"]) or any(pd.api.types.is_datetime64_any_dtype(df_merged[col_baseline]) for col in rule["columns"]):
-                    #     df_merged["Trade_Date_Diff"] = (df_merged[col_candidate] - df_merged[col_baseline]).dt.days
-                    #     df_merged["Trade_Date_Diff"] = df_merged["Trade_Date_Diff"].fillna(0).astype(int)
-                    #     df_merged.loc[df_merged["Trade_Date_Diff"].abs() > updated_days, "classification"] = rule.get("Category", "None")
-                    
-                    elif rule_type == "ignore_differences":
-                        continue
-                    elif is_string_column and has_only_category:
-                        category = rule.get("Category", "None")
-                        df_merged[col_baseline] = df_merged[col_baseline].astype(str).str.strip()
-                        df_merged[col_candidate] = df_merged[col_candidate].astype(str).str.strip()
+                for _, row in df_merged[df_merged["classification"] == "DISCREPANCY"].iterrows():
+                    discrepancies.append({
+                        key_column: row[key_column],
+                        "Column Name": col,
+                        "Rule Type": rule_type,
+                        "Category": "DISCREPANCY",
+                        "Rule Number": rule_number,
+                        "Description": rule_description,
+                        "Baseline Field Value": row[col_baseline],
+                        "Candidate Field Value": row[col_candidate]
+                    })
 
-                        df_merged["String_Mismatch"] = df_merged.apply(lambda row: row[col_baseline] != row[col_candidate], axis=1)
-                        df_merged.loc[df_merged["String_Mismatch"], "classification"] = rule.get("Category", "None")
+      discrepancies_df = pd.DataFrame(discrepancies)
+      discrepancies_df = discrepancies_df.astype(str)
+      print(discrepancies_df)
 
-                    # ✅ Collect Discrepancies
-                    for _, row in df_merged[df_merged["classification"] != "ACCEPTABLE"].iterrows():
-                        discrepancies.append({
-                            key_column: row[key_column],
-                            "Column Name": col,
-                            "Rule Type": rule_type,
-                            "Category": row["classification"],
-                            "Rule Number": rule_number,
-                            "Description": rule_description,
-                            "Baseline Field Value": row[col_baseline],
-                            "Candidate Field Value": row[col_candidate]
-                        })
-
-        # ✅ Include Missing Rows
-        for _, row in extra_rows_baseline.iterrows():
-            discrepancies.append({
-                key_column: row[key_column],
-                "Column Name": "ALL",
-                "Rule Type": "Missing in Candidate",
-                "Category": "INFO",
-                "Rule Number": "Missing_Row_Baseline",
-                "Description": "Row exists in baseline but is missing in candidate.",
-                "Baseline Field Value": row.to_dict(),
-                "Candidate Field Value": "MISSING"
-            })
-
-        for _, row in extra_rows_candidate.iterrows():
-            discrepancies.append({
-                key_column: row[key_column],
-                "Column Name": "ALL",
-                "Rule Type": "Missing in Baseline",
-                "Category": "INFO",
-                "Rule Number": "Missing_Row_Candidate",
-                "Description": "Row exists in candidate but is missing in baseline.",
-                "Baseline Field Value": "MISSING",
-                "Candidate Field Value": row.to_dict()
-            })
-
-        # Convert discrepancies to DataFrame
-        discrepancies_df = pd.DataFrame(discrepancies)
-
-        # ✅ Ensure 'Category' Column Exists
-        if "Category" not in discrepancies_df.columns:
-            discrepancies_df["Category"] = "UNKNOWN"
-
-        # ✅ Convert all columns to strings to avoid serialization issues
-        discrepancies_df = discrepancies_df.astype(str)
-
-        return discrepancies_df
+      return discrepancies_df

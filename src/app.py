@@ -198,13 +198,16 @@ st.sidebar.header("🔍 Filter Rules")
 selected_filters = st.session_state["selected_filters"]
 
 for rule in rules_config.get("rules", []):
+    if not isinstance(rule, dict):
+        continue  # Skip invalid rules
+
     rule_number = rule.get("Rule Number", "Unknown Rule")
     rule_type = rule.get("type", "Unknown Type")
-    rule_columns = ", ".join(rule.get("columns", []))
+    rule_columns = ", ".join(rule.get("columns", [])) if rule.get("columns") else "N/A"
 
     st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
     st.sidebar.write(f"📝 Columns: {rule_columns}")
-
+    
     selected_filters.setdefault(rule_number, {})
 
     for key, value in rule.items():
