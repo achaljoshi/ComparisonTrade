@@ -1156,7 +1156,8 @@
     "priceQuotationFactor": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "Rule Number": "112",
+        
             "columns": [
                 "priceQuotationFactor"
             ],
@@ -1164,11 +1165,12 @@
             "constraints": {
                 "min": 1
             },
+            "category":"Test",
             "format": "Integer"
         },
         {
             "type": "Numerical check",
-            "Rule Number": "2",
+            "Rule Number": "114",
             "columns": [
                 "priceQuotationFactor"
             ],
@@ -1176,6 +1178,7 @@
             "constraints": {
                 "max": 999999999
             },
+            "category":"Test Max",
             "format": "Integer"
         }
     ],

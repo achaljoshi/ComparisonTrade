@@ -173,8 +173,7 @@ class DataProcessor:
       if "rules" not in self.rules_config or not isinstance(self.rules_config["rules"], dict):
        raise ValueError("Error: 'rules' key not found or incorrectly formatted in rules_config.json. Please check your config file.")
       
-      key_column = "messageId" if "messageId" in self.rules_config["rules"] else None
-    
+      key_column = self.rules_config["identifier"]
       if not key_column:
        raise ValueError("Error: 'messageId' key not found in rules_config.json under 'rules'. Please check your config file.")
 
@@ -217,18 +216,23 @@ class DataProcessor:
             col_candidate = f"{col}_candidate"
 
             if col_baseline in df_merged.columns and col_candidate in df_merged.columns:
-                df_merged["rule_violation"] = abs(
-                    pd.to_numeric(df_merged[col_candidate], errors="coerce") - 
-                    pd.to_numeric(df_merged[col_baseline], errors="coerce")
-                )
-                df_merged.loc[df_merged["rule_violation"] > 0, "classification"] = "DISCREPANCY"
-
-                for _, row in df_merged[df_merged["classification"] == "DISCREPANCY"].iterrows():
+                #df_merged["rule_violation"] = abs(
+                #    pd.to_numeric(df_merged[col_candidate], errors="coerce") - 
+               #     pd.to_numeric(df_merged[col_baseline], errors="coerce")
+               # )
+                updated_warning_min = filters.get(rule_number, {}).get("constraints_min", rule.get("constraints", {}).get("min", float("inf")))
+                updated_warning_max = filters.get(rule_number, {}).get("constraints_max", rule.get("constraints", {}).get("max", float("inf")))
+                if "constraints" in rule:
+                        df_merged["rule_violation"] = abs(pd.to_numeric(df_merged[col_candidate], errors="coerce") - pd.to_numeric(df_merged[col_baseline], errors="coerce"))
+                        df_merged.loc[df_merged["rule_violation"] >= updated_warning_max, "classification"] = rule.get("category", "FATAL")
+                        df_merged.loc[(df_merged["rule_violation"] >= updated_warning_min) & (df_merged["rule_violation"] < updated_warning_max), "classification"] = rule.get("category", "WARNING")
+               # df_merged.loc[df_merged["rule_violation"] > 0, "classification"] = rule.get("category", "None")
+                for _, row in df_merged[df_merged["classification"] != "ACCEPTABLE"].iterrows():
                     discrepancies.append({
                         key_column: row[key_column],
                         "Column Name": col,
                         "Rule Type": rule_type,
-                        "Category": "DISCREPANCY",
+                        "category": row["classification"],
                         "Rule Number": rule_number,
                         "Description": rule_description,
                         "Baseline Field Value": row[col_baseline],

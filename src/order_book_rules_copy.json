@@ -1,0 +1,51 @@
+{   "identifier":"id",
+    "rules":{
+    "groxType": [
+        {
+            "type": "Value check",
+            "Rule Number": "1",
+            "columns": [
+                "groupType"
+            ],
+            "category":"Type 1",
+            "constraints": {
+                "min": 1,
+                "max":9999
+            },
+            "description": "groupType must be one of the predefined acceptable values.",
+            "valid_values": [
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                "10",
+                "11",
+                "12",
+                "13",
+                "14",
+                "15"
+            ]
+        },
+        {
+            "type": "Default value",
+            "Rule Number": "2",
+            "columns": [
+                "groupType"
+            ],
+            "category":"Type 2",
+            "constraints": {
+                "min":1,
+                "max": 9999
+            },
+            "description": "Default value for groupType is 0 when it is undefined or not applicable.",
+            "default_value": "0"
+        }
+    ]
+}
+}
