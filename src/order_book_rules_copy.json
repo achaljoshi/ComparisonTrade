@@ -46,6 +46,37 @@
             "description": "Default value for groupType is 0 when it is undefined or not applicable.",
             "default_value": "0"
         }
-    ]
+    ],
+    "tickSizes": [
+            {
+                "type": "Range check",
+                "Rule Number": "1",
+                "category":"Type 3",
+                "columns": ["tickSizes[0]"],
+                "constraints": {
+                    "min":1,
+                    "max": 9999
+                },
+                "description": "Ensure that tickSizes follow the defined lower and upper limit constraints.",
+                "ranges": [
+                    {
+                        "lowerLimit": 1,
+                        "upperLimit": 99,
+                        "tickSize": 1
+                    },
+                    {
+                        "lowerLimit": 100,
+                        "upperLimit": 1999,
+                        "tickSize": 5
+                    },
+                    {
+                        "lowerLimit": 2000,
+                        "upperLimit": 214748360,
+                        "tickSize": 10
+                    }
+                ]
+            }
+        ]
+    
 }
 }

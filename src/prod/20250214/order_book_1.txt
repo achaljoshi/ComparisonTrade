@@ -23,11 +23,7 @@
         contractSize = 1
         priceQuotationFactor = 1
         priceUnit = 2
-        tickSizes[0] = {
-            lowerLimit = 1
-            upperLimit = 99
-            tickSize = 1
-        }
+        tickSizes[0] = {lowerLimit = 2 upperLimit = 99 tickSize = 1 }
         tickSizes[1] = {
             lowerLimit = 100
             upperLimit = 1999
