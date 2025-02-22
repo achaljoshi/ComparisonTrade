@@ -48,35 +48,56 @@
         }
     ],
     "tickSizes": [
-            {
-                "type": "Range check",
-                "Rule Number": "1",
-                "category":"Type 3",
-                "columns": ["tickSizes[0]"],
-                "constraints": {
-                    "min":1,
-                    "max": 9999
-                },
-                "description": "Ensure that tickSizes follow the defined lower and upper limit constraints.",
-                "ranges": [
-                    {
-                        "lowerLimit": 1,
-                        "upperLimit": 99,
-                        "tickSize": 1
-                    },
-                    {
-                        "lowerLimit": 100,
-                        "upperLimit": 1999,
-                        "tickSize": 5
-                    },
-                    {
-                        "lowerLimit": 2000,
-                        "upperLimit": 214748360,
-                        "tickSize": 10
-                    }
-                ]
-            }
-        ]
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "tickSizes"
+            ],
+            "description": "Tick sizes must be a positive integer value.",
+            "constraints": {
+                "min": 1,
+                "max":9999
+            },
+            "sub_columns": [
+                "lowerLimit",
+                "upperLimit",
+                "tickSize"
+            ],
+            "valid_values": [],
+            "default_value": null,
+            "tolerance": null,
+            "exclusions": []
+        },
+        {
+            "type": "Predefined values check",
+            "Rule Number": "2",
+            "columns": [
+                "tickSizes"
+            ],
+           "sub_columns": [
+                "lowerLimit",
+                "upperLimit",
+                "tickSize"
+            ],
+            "constraints": {
+                "min": 1,
+                "max":9999
+            },
+            "description": "Tick sizes must be one of the predefined values.",
+            "valid_values": [
+                3,
+                4,
+                8,
+                16,
+                32,
+                64
+            ],
+            "default_value": null,
+            "tolerance": null,
+            "exclusions": []
+        }
+    ]
     
 }
 }
