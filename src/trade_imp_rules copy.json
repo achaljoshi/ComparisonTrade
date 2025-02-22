@@ -1,0 +1,83 @@
+{  "identifier":"orderBookId",
+    "rules":{
+    "matchId": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "matchId"
+            ],
+            "format_type":"Object",
+            "sub_columns": [
+                "matchGroupId",
+                "notUsed",
+                "combinationMatchId"
+            ],
+            "description": "The matchGroupId must be a monotonically increasing number per partition, assigned to an execution event.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Presence check",
+            "Rule Number": "2",
+            "columns": [
+                "matchId"
+            ],
+            "sub_columns": [
+                "matchGroupId",
+                "notUsed",
+                "combinationMatchId"
+            ],
+            "description": "The matchGroupId must be present if the preceding boolean is set to true.",
+            "relations": [
+                "preceding boolean"
+            ]
+        }
+    ],
+    "orderPrice": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "orderPrice"
+            ],
+            "description": "The order price must be a valid numerical value.",
+            "constraints": {
+                "min": 1,
+                "max":2
+            },
+            "format": "Long"
+        },
+        {
+            "type": "Dependency check",
+            "Rule Number": "2",
+            "columns": [
+                "orderPrice",
+                "priceLimitsReferencePrice"
+            ],
+            "constraints": {
+                "min": 1,
+                "max":2
+            },
+            "description": "The order price must be within the static price limits reference price.",
+            "relations": [
+                "priceLimitsReferencePrice"
+            ]
+        },
+        {
+            "type": "Dependency check",
+            "Rule Number": "3",
+            "columns": [
+                "orderPrice",
+                "circuitBreakerLimitsReferencePrice"
+            ],
+            "description": "The order price must be within the circuit breaker limits reference price.",
+            "relations": [
+                "circuitBreakerLimitsReferencePrice"
+            ]
+        }
+    ]
+}
+}

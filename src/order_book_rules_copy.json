@@ -55,6 +55,7 @@
                 "tickSizes"
             ],
             "description": "Tick sizes must be a positive integer value.",
+            "format_type":"Array",
             "constraints": {
                 "min": 1,
                 "max":9999

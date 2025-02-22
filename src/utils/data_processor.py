@@ -87,61 +87,94 @@ class DataProcessor:
         return input_file_baseline, input_file_candidate, output_file_result
 
 
+
+
     def read_text_file(self, file_path: Path) -> pd.DataFrame:
-        """Reads a structured text file and dynamically extracts array-based fields."""
+        """Reads a structured text file and extracts object-based and array-based fields dynamically."""
 
         records = []
         current_record = {}
-        inside_record = False  # ✅ Track whether we're inside a `{}` block
+        inside_record = False  # Track if inside `{}` block
 
-        # ✅ Dynamically identify fields that follow `field[index]` pattern
-        array_fields = [
-            key for key, rules in self.rules_config["rules"].items()
-            if any("sub_columns" in rule for rule in rules)  # ✅ Check if it has sub-columns
-        ]
-        
-        print(f"🔹 Identified Dynamic Array Fields: {array_fields}")  # ✅ Debugging Output
+        # Identify array and object fields based on rules_config.json
+        array_fields = {
+            key: rule["sub_columns"]
+            for key, rules in self.rules_config["rules"].items()
+            for rule in rules
+            if rule.get("format_type") == "Array" and "sub_columns" in rule
+        }
+
+        object_fields = {
+            key: rule["sub_columns"]
+            for key, rules in self.rules_config["rules"].items()
+            for rule in rules
+            if rule.get("format_type") == "Object" and "sub_columns" in rule
+        }
+
+        print(f"🔹 Identified Array Fields: {array_fields}")
+        print(f"🔹 Identified Object Fields: {object_fields}")
 
         with open(file_path, "r") as file:
             for line in file:
                 line = line.strip()
 
-                # ✅ Start a new record when `{` is encountered
                 if line == "{":
                     inside_record = True
-                    current_record = {}  # Start new record
+                    current_record = {}
                     continue
 
-                # ✅ End of record
                 elif line == "}":
                     inside_record = False
-                    if current_record:  # ✅ Store only non-empty records
+                    if current_record:
                         records.append(current_record)
                     current_record = {}
                     continue
 
-                # ✅ Extract key-value pairs correctly (only inside `{}` block)
                 if inside_record and "=" in line:
                     key, value = map(str.strip, line.split("=", 1))
 
-                    # ✅ Check if the key is part of dynamically identified array fields
-                    if any(field in key and "[" in key for field in array_fields):
-                        print(f"🔹 Identified Dynamic Array Field: {key}")  # ✅ Debugging Output
+                    # Handle Object-based fields
+                    object_match = re.match(r"(\w+)\s*=\s*\{(.*)\}", line)
+                    if object_match:
+                        obj_key, obj_values = object_match.groups()
+                        obj_values = obj_values.strip().split()
 
-                    current_record[key] = value  # ✅ Store key-value pair dynamically
+                        if obj_key in object_fields:
+                            sub_cols = object_fields[obj_key]
+                            obj_data = {}
 
-        # ✅ Append last record if it exists
-        if current_record:
-            records.append(current_record)
+                            # Ensure we don't exceed expected sub_columns
+                            for i, sub_col in enumerate(sub_cols):
+                                if i < len(obj_values) and "=" in obj_values[i]:
+                                    sub_key, sub_value = obj_values[i].split("=", 1)
+                                    obj_data[sub_key] = sub_value
+                            
+                            current_record[obj_key] = obj_data
+                        continue
 
-        # ✅ Convert parsed records to a DataFrame
+                    # Handle Array-based fields
+                    array_match = re.match(r"(\w+)\s*=\s*(\[.*\])", line)
+                    if array_match:
+                        arr_key, arr_values = array_match.groups()
+
+                        if arr_key in array_fields:
+                            array_data = {
+                                int(k): int(v) for k, v in re.findall(r"\[(\d+)=(\d+)\]", arr_values)
+                            }
+                            current_record[arr_key] = array_data
+                        continue
+
+                    # Default key-value storage
+                    current_record[key] = value
+
+        # Convert parsed records into DataFrame
         df = pd.DataFrame(records)
 
-        # ✅ Debugging: Print parsed results
-        print("Parsed DataFrame:\n", df.head())
-        print("Columns after parsing:", df.columns.tolist())
+        print("🔹 Parsed DataFrame:\n", df.head())
+        print("🔹 Columns after parsing:", df.columns.tolist())
 
         return df
+
 
 
     def read_dd_file(self, file_path: Path) -> pd.DataFrame:
