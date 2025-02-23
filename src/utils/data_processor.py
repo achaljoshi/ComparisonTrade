@@ -86,15 +86,14 @@ class DataProcessor:
 
         return input_file_baseline, input_file_candidate, output_file_result
 
-
-
-
     def read_text_file(self, file_path: Path) -> pd.DataFrame:
-        """Reads a structured text file and extracts object-based and array-based fields dynamically."""
+        """Reads a structured text file and extracts nested objects and array-based fields dynamically."""
 
         records = []
         current_record = {}
-        inside_record = False  # Track if inside `{}` block
+        inside_record = False
+        stack = []
+        current_key = None
 
         # Identify array and object fields based on rules_config.json
         array_fields = {
@@ -104,78 +103,92 @@ class DataProcessor:
             if rule.get("format_type", "").lower() == "array" and "sub_columns" in rule
         }
 
-        object_fields = {
-            key: rule["sub_columns"]
-            for key, rules in self.rules_config["rules"].items()
-            for rule in rules
-            if rule.get("format_type", "").lower() == "object" and "sub_columns" in rule
-        }
-
-        print(f"🔹 Identified Array Fields: {array_fields}")
-        print(f"🔹 Identified Object Fields: {object_fields}")
-
         with open(file_path, "r") as file:
             for line in file:
                 line = line.strip()
 
+                # Start of a new record
                 if line == "{":
+                    if inside_record:
+                        stack.append((current_record, current_key))
+                        current_record = {}
                     inside_record = True
-                    current_record = {}
                     continue
 
+                # End of a record or nested object
                 elif line == "}":
-                    inside_record = False
-                    if current_record:
-                        records.append(current_record)
-                    current_record = {}
+                    if stack:
+                        parent_record, parent_key = stack.pop()
+                        parent_record[parent_key] = current_record  # Assign nested object to its parent key
+                        current_record = parent_record  # Restore previous context
+                        current_key = None
+                    else:
+                        records.append(current_record)  # Store complete record
+                        current_record = {}
+                        inside_record = False  # End of full record
                     continue
 
-                if inside_record and "=" in line:
+                # Handle key-value pairs
+                if "=" in line:
                     key, value = map(str.strip, line.split("=", 1))
 
-                    # Handle Object-based fields
-                    object_match = re.match(r"(\w+)\s*=\s*\{(.*)\}", line)
-                    if object_match:
-                        obj_key, obj_values = object_match.groups()
-                        obj_values = obj_values.strip().split()
+                    if line.__contains__("[") and line.__contains__("]"):
+                        array_match = re.match(r"(\w+)\s*=\s*(\[.*\])", line)
+                        if array_match:
+                            arr_key, arr_values = array_match.groups()
 
-                        if obj_key in object_fields:
-                            sub_cols = object_fields[obj_key]
-                            obj_data = {}
+                            if arr_key in array_fields:
+                                array_data = {
+                                    int(k): int(v) for k, v in re.findall(r"\[(\d+)=(\d+)\]", arr_values)
+                                }
+                                current_record[arr_key] = array_data
+                            continue
 
-                            # Ensure we don't exceed expected sub_columns
-                            for i, sub_col in enumerate(sub_cols):
-                                if i < len(obj_values) and "=" in obj_values[i]:
-                                    sub_key, sub_value = obj_values[i].split("=", 1)
-                                    obj_data[sub_key] = sub_value
-                            
-                            current_record[obj_key] = obj_data
+                    # Handle nested object start
+                    if value.startswith("{") and not value.endswith("}"):
+                        current_key = key
+                        stack.append((current_record, current_key))
+                        current_record = {}
                         continue
 
-                    # Handle Array-based fields
-                    array_match = re.match(r"(\w+)\s*=\s*(\[.*\])", line)
-                    if array_match:
-                        arr_key, arr_values = array_match.groups()
-
-                        if arr_key in array_fields:
-                            array_data = {
-                                int(k): int(v) for k, v in re.findall(r"\[(\d+)=(\d+)\]", arr_values)
-                            }
-                            current_record[arr_key] = array_data
+                    # Inline nested object parsing
+                    if value.startswith("{") and value.endswith("}"):
+                        current_record[key] = self.parse_nested_object(value)
                         continue
 
-                    # Default key-value storage
+                    # Array parsing
+                    if "[" in value and "]" in value:
+                        current_record[key] = self.parse_array(value)
+                        continue
+
+                    # Default key-value assignment
                     current_record[key] = value
 
         # Convert parsed records into DataFrame
         df = pd.DataFrame(records)
 
-        print("🔹 Parsed DataFrame:\n", df.head())
-        print("🔹 Columns after parsing:", df.columns.tolist())
-
         return df
 
+    def parse_nested_object(self, text):
+        if not isinstance(text, str):
+            return "{}"  # ✅ Ensure we return an empty object format if input is not a string
 
+        # ✅ Extract key-value pairs from nested object
+        matches = re.findall(r"(\w+)\s*=\s*([\w\d\-]+)", text)
+
+        # ✅ Convert extracted data back into the correct format
+        formatted_string = "{ " + " ".join(f"{key} = {value}" for key, value in matches) + " }"
+
+        return formatted_string
+
+    def parse_array(self, text):
+        array_data = {}
+        matches = re.findall(r"\[(\d+)=([\d\w\-]+)\]", text)
+
+        for index, value in matches:
+            array_data[f"{index}"] = value  # Store as key-value pairs
+
+        return array_data
 
     def read_dd_file(self, file_path: Path) -> pd.DataFrame:
         """Read a DD file (.log or .csv) with appropriate delimiters."""
@@ -197,11 +210,8 @@ class DataProcessor:
         else:
             raise ValueError(f"Unsupported file type: {file_path.suffix}")
         
-        
-
     def compare_files(self, df_baseline=None, df_candidate=None, file_type="Excel", filters=None):
         """Compare Baseline and Candidate files using dynamically defined rules from rules_config.json."""
-        
         if filters is None:
             filters = {}
 
@@ -258,10 +268,6 @@ class DataProcessor:
             # ✅ Dynamically extract sub-columns from rules_config.json
             sub_columns = next((rule.get("sub_columns") for rule in ticksize_rules if "sub_columns" in rule), [])
 
-            # ✅ Ensure at least a default set is present
-            if not sub_columns:
-                sub_columns = ["lowerLimit", "upperLimit", "tickSize"]  # Default fallback
-
             print(f"🔹 Extracted sub_columns: {sub_columns}")  # ✅ Debugging Output
 
             # ✅ For handling arrays
@@ -283,18 +289,41 @@ class DataProcessor:
 
                 print(f"🔹 Generated Regex Pattern: {ticksize_pattern.pattern}")  # ✅ Debugging Output
 
-                # ✅ Extract all dynamic ticksize_rule_key columns dynamically
-                ticksize_columns_baseline = [col for col in df_merged.columns if re.match(fr"{re.escape(ticksize_rule_key)}\[\d+\]_baseline", col)]
-                ticksize_columns_candidate = [col for col in df_merged.columns if re.match(fr"{re.escape(ticksize_rule_key)}\[\d+\]_candidate", col)]
+                if ticksize_rule_key in self.rules_config["rules"]:
+                    format_type = next((rule["format_type"] for rule in self.rules_config["rules"][ticksize_rule_key] if "format_type" in rule), None)
+                else:
+                    format_type = None
+                
+                if format_type == "Array":
+                    # Match tickSize columns (Array Format)
+                    ticksize_columns_baseline = [col for col in df_merged.columns if re.search(fr"{re.escape(ticksize_rule_key)}\[\d+\]_baseline", col)]
+                    ticksize_columns_candidate = [col for col in df_merged.columns if re.search(fr"{re.escape(ticksize_rule_key)}\[\d+\]_candidate", col)]
+                    print(f"🔹 Extracted Array Columns (Baseline): {ticksize_columns_baseline}")
+                    print(f"🔹 Extracted Array Columns (Candidate): {ticksize_columns_candidate}")
+
+                elif format_type == "Object":
+                    # Match matchId columns (Object Format)
+                    ticksize_columns_baseline = [col for col in df_merged.columns if re.search(fr"{re.escape(ticksize_rule_key)}_baseline", col)]
+                    ticksize_columns_candidate = [col for col in df_merged.columns if re.search(fr"{re.escape(ticksize_rule_key)}_candidate", col)]
+                    print(f"🔹 Extracted Object Columns (Baseline): {ticksize_columns_baseline}")
+                    print(f"🔹 Extracted Object Columns (Candidate): {ticksize_columns_candidate}")
+
+                else:
+                    print(f"⚠️ Warning: Format type unknown for {ticksize_rule_key}, no extraction applied.")
+                    ticksize_columns_baseline, ticksize_columns_candidate = [], []
 
                 print(f"🔹 Extracted ticksize_rule_key columns (Baseline): {ticksize_columns_baseline}")
                 print(f"🔹 Extracted ticksize_rule_key columns (Candidate): {ticksize_columns_candidate}")
 
                 # ✅ Iterate over all rows
                 for _, row in df_merged.iterrows():
-                    # ✅ Dynamically build ticksize_rule_key string from identified columns
-                    baseline_str = " ".join(str(row[col]) for col in ticksize_columns_baseline if pd.notna(row[col]))
-                    candidate_str = " ".join(str(row[col]) for col in ticksize_columns_candidate if pd.notna(row[col]))
+                    if format_type == "Array":
+                        baseline_str = " ".join(str(row[col]) for col in ticksize_columns_baseline if pd.notna(row[col]))
+                        candidate_str = " ".join(str(row[col]) for col in ticksize_columns_candidate if pd.notna(row[col]))
+
+                    elif format_type == "Object":
+                        baseline_str = str(row[ticksize_columns_baseline[0]]) if ticksize_columns_baseline else ""
+                        candidate_str = str(row[ticksize_columns_candidate[0]]) if ticksize_columns_candidate else ""
 
                     # ✅ Debugging output
                     print(f"\nRow Index: {row.name}")
@@ -318,6 +347,12 @@ class DataProcessor:
                         cand_values = candidate_tickSizes.get(idx, {})
 
                         for field in sub_columns:  # ✅ Iterate dynamically over sub_columns
+
+                            if(len(baseline_tickSizes) > 1 and len(candidate_tickSizes) > 1):
+                                output_column_name = f"{ticksize_rule_key}[{idx}].{field}"
+                            else:
+                                output_column_name = f"{ticksize_rule_key}.{field}"
+
                             base_val = base_values.get(field)
                             cand_val = cand_values.get(field)
 
@@ -330,7 +365,7 @@ class DataProcessor:
                             for _, row in df_merged[df_merged["rule_violation"] > 0].iterrows():
                                 discrepancies.append({
                                     key_column: row[key_column],
-                                    "Column Name": f"{ticksize_rule_key}[{idx}].{field}",
+                                    "Column Name": output_column_name,
                                     "Rule Type": rule_type,
                                     "category": row["classification"],
                                     "Rule Number": rule_number,

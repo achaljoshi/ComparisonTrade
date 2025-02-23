@@ -33,6 +33,63 @@
             },
             "format": "Long"
         }
+    ],
+    "nationalBidPriceSnapshot": [
+        {
+            "type": "Numerical check",
+            "Rule Number": "1",
+            "columns": [
+                "nationalBidPriceSnapshot"
+            ],
+            "description": "The national bid price snapshot must be a valid long integer representing the price.",
+            "constraints": {
+                "min": 0
+            },
+            "format": "Long"
+        }
+    ],
+    "tradeType": [
+        {
+            "type": "Value check",
+            "Rule Number": "1",
+            "columns": [
+                "tradeType"
+            ],
+            "constraints": {
+                "min": 0
+            },
+            "description": "The tradeType field must be a byte value representing the status of the trade.",
+            "valid_values": [
+                "Standard",
+                "Reversing",
+                "Overtaking"
+            ]
+        },
+        {
+            "type": "Range check",
+            "Rule Number": "2",
+            "columns": [
+                "tradeType"
+            ],
+            "description": "The tradeType field must be within the valid byte range.",
+            "constraints": {
+                "min": 0
+            }
+        }
+    ],
+    "tradeCondition": [
+        {
+            "type": "Range check",
+            "Rule Number": "TC-001",
+            "columns": [
+                "tradeCondition"
+            ],
+            "description": "The tradeCondition field must be within the valid range of integer values.",
+            "constraints": {
+                "min": 0,
+                "max": 1
+            }
+        }
     ]
 }
 }

@@ -1,4 +1,6 @@
-{"rules":{
+{
+    "identifier":"orderBookId",
+    "rules":{
     "tradeTime": [
         {
             "type": "Date check",
@@ -178,7 +180,7 @@
             "type": "Numerical check",
             "Rule Number": "1",
             "columns": [
-                "matchId.matchGroupId"
+                "matchId"
             ],
             "description": "The matchGroupId must be a monotonically increasing number per partition, assigned to an execution event.",
             "constraints": {
@@ -190,7 +192,7 @@
             "type": "Presence check",
             "Rule Number": "2",
             "columns": [
-                "matchId.matchGroupId"
+                "matchId"
             ],
             "description": "The matchGroupId must be present if the preceding boolean is set to true.",
             "relations": [
@@ -228,7 +230,7 @@
             "type": "Numerical check",
             "Rule Number": "1",
             "columns": [
-                "combinationMatchId"
+                "matchId"
             ],
             "description": "The combinationMatchId must be a sequential number of an execution sequence number.",
             "constraints": {
@@ -240,7 +242,7 @@
             "type": "Presence check",
             "Rule Number": "2",
             "columns": [
-                "combinationMatchId"
+                "matchId"
             ],
             "description": "The combinationMatchId field must be present if the preceding boolean is set to true.",
             "relations": [
@@ -265,9 +267,11 @@
             "type": "Dependency check",
             "Rule Number": "2",
             "columns": [
-                "orderPrice",
-                "priceLimitsReferencePrice"
+                "orderPrice"
             ],
+            "constraints": {
+                "min": 0
+            },
             "description": "The order price must be within the static price limits reference price.",
             "relations": [
                 "priceLimitsReferencePrice"
@@ -277,9 +281,11 @@
             "type": "Dependency check",
             "Rule Number": "3",
             "columns": [
-                "orderPrice",
-                "circuitBreakerLimitsReferencePrice"
+                "orderPrice"
             ],
+            "constraints": {
+                "min": 0
+            },
             "description": "The order price must be within the circuit breaker limits reference price.",
             "relations": [
                 "circuitBreakerLimitsReferencePrice"
@@ -443,6 +449,9 @@
             "columns": [
                 "tradeType"
             ],
+            "constraints": {
+                "min": 0
+            },
             "description": "The tradeType field must be a byte value representing the status of the trade.",
             "valid_values": [
                 "Standard",
@@ -458,8 +467,7 @@
             ],
             "description": "The tradeType field must be within the valid byte range.",
             "constraints": {
-                "min": 0,
-                "max": 255
+                "min": 0
             }
         }
     ],
@@ -993,87 +1001,6 @@
                 "min": 0
             },
             "format": "Long"
-        },
-        {
-            "type": "Date check",
-            "Rule Number": "2",
-            "columns": [
-                "timestamp"
-            ],
-            "description": "The timestamp must be a valid long integer representing the time at which the message was sent in UTC.",
-            "format": "Long"
-        },
-        {
-            "type": "Numerical check",
-            "Rule Number": "3",
-            "columns": [
-                "orderBookId"
-            ],
-            "description": "The orderBookId must be a valid integer representing the order book the limits are for.",
-            "constraints": {
-                "min": 1
-            },
-            "format": "Integer"
-        },
-        {
-            "type": "Boolean check",
-            "Rule Number": "4",
-            "columns": [
-                "priceLimits"
-            ],
-            "description": "The priceLimits field must be a boolean indicating whether the price limits or circuit breaker limits are applied.",
-            "valid_values": [
-                true,
-                false
-            ]
-        },
-        {
-            "type": "Boolean check",
-            "Rule Number": "5",
-            "columns": [
-                "dynamic"
-            ],
-            "description": "The dynamic field must be a boolean indicating whether the limits are dynamic or static.",
-            "valid_values": [
-                true,
-                false
-            ]
-        },
-        {
-            "type": "Numerical check",
-            "Rule Number": "6",
-            "columns": [
-                "upperLimit"
-            ],
-            "description": "The upperLimit must be a valid long integer representing the upper price limit.",
-            "constraints": {
-                "min": 0
-            },
-            "format": "Long"
-        },
-        {
-            "type": "Numerical check",
-            "Rule Number": "7",
-            "columns": [
-                "lowerLimit"
-            ],
-            "description": "The lowerLimit must be a valid long integer representing the lower price limit.",
-            "constraints": {
-                "min": 0
-            },
-            "format": "Long"
-        },
-        {
-            "type": "Numerical check",
-            "Rule Number": "8",
-            "columns": [
-                "referencePrice"
-            ],
-            "description": "The referencePrice must be a valid long integer representing the reference price used when calculating the limits.",
-            "constraints": {
-                "min": 0
-            },
-            "format": "Long"
         }
     ],
     "nationalOfferPriceSnapshot": [
@@ -1149,27 +1076,15 @@
     ],
     "tradeCondition": [
         {
-            "type": "Numerical check",
-            "Rule Number": "TC-001",
-            "columns": [
-                "tradeCondition"
-            ],
-            "description": "The tradeCondition field must be an integer.",
-            "constraints": {
-                "min": null,
-                "max": null
-            }
-        },
-        {
             "type": "Range check",
-            "Rule Number": "TC-002",
+            "Rule Number": "TC-001",
             "columns": [
                 "tradeCondition"
             ],
             "description": "The tradeCondition field must be within the valid range of integer values.",
             "constraints": {
-                "min": -2147483648,
-                "max": 2147483647
+                "min": 0,
+                "max": 1
             }
         }
     ],
