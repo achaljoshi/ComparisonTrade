@@ -3,7 +3,7 @@
     "input_base_dir_candidate": "/Users/achal/OneDrive/Documents/GitHub/ComparisonTrade/src",
     "output_base_dir": "/Users/achal/OneDrive/Documents/GitHub/ComparisonTrade",
     
-    "input_file_baseline": "{input_base_dir_baseline}/prod/20250214/trade_impl_1.txt",
-    "input_file_candidate": "{input_base_dir_candidate}/prod/20250214/trade_impl_1.txt",
+    "input_file_baseline": "{input_base_dir_baseline}/prod/20250214/order_book_1.txt",
+    "input_file_candidate": "{input_base_dir_candidate}/prod/20250214/order_book_2.txt",
     "output_file_result": "{output_base_dir}/output/20250214/result.xlsx"
 }
