@@ -8,7 +8,9 @@ from utils.data_processor import DataProcessor
 import plotly.colors
 import shutil
 import tempfile
+import logging
 
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 # Get the absolute path of the current script's directory

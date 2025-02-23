@@ -101,14 +101,14 @@ class DataProcessor:
             key: rule["sub_columns"]
             for key, rules in self.rules_config["rules"].items()
             for rule in rules
-            if rule.get("format_type") == "Array" and "sub_columns" in rule
+            if rule.get("format_type", "").lower() == "array" and "sub_columns" in rule
         }
 
         object_fields = {
             key: rule["sub_columns"]
             for key, rules in self.rules_config["rules"].items()
             for rule in rules
-            if rule.get("format_type") == "Object" and "sub_columns" in rule
+            if rule.get("format_type", "").lower() == "object" and "sub_columns" in rule
         }
 
         print(f"🔹 Identified Array Fields: {array_fields}")
@@ -239,6 +239,12 @@ class DataProcessor:
 
         df_merged = df_baseline.merge(df_candidate, on=key_column, suffixes=("_baseline", "_candidate"), how="outer", indicator=True)
 
+        df_merged = df_merged[df_merged["_merge"] == "both"]
+
+        # ✅ Identify Missing Rows Before Applying Rules
+        extra_rows_candidate = df_candidate[~df_candidate[key_column].isin(df_baseline[key_column])]
+        extra_rows_baseline = df_baseline[~df_baseline[key_column].isin(df_candidate[key_column])]
+
         discrepancies = []
         
        # ✅ Dynamically extract tick size rule key from rules_config.json
@@ -246,117 +252,94 @@ class DataProcessor:
             (key for key, rules in self.rules_config["rules"].items() if any("sub_columns" in rule for rule in rules)), None
         )
 
-        if not ticksize_rule_key:
-            raise ValueError("❌ No rule found with 'sub_columns' in rules_config.json!")
+        if ticksize_rule_key:
+            ticksize_rules = self.rules_config["rules"].get(ticksize_rule_key, [])
 
-        ticksize_rules = self.rules_config["rules"].get(ticksize_rule_key, [])
+            # ✅ Dynamically extract sub-columns from rules_config.json
+            sub_columns = next((rule.get("sub_columns") for rule in ticksize_rules if "sub_columns" in rule), [])
 
-        # ✅ Dynamically extract sub-columns from rules_config.json
-        sub_columns = next((rule.get("sub_columns") for rule in ticksize_rules if "sub_columns" in rule), [])
+            # ✅ Ensure at least a default set is present
+            if not sub_columns:
+                sub_columns = ["lowerLimit", "upperLimit", "tickSize"]  # Default fallback
 
-        # ✅ Ensure at least a default set is present
-        if not sub_columns:
-            sub_columns = ["lowerLimit", "upperLimit", "tickSize"]  # Default fallback
+            print(f"🔹 Extracted sub_columns: {sub_columns}")  # ✅ Debugging Output
 
-        print(f"🔹 Extracted sub_columns: {sub_columns}")  # ✅ Debugging Output
+            # ✅ For handling arrays
+            min_tick_size, max_tick_size, predefined_values = 0, 0, set()
+            for rule in ticksize_rules:
+                rule_number = rule.get("Rule Number", "N/A")
+                rule_type = rule.get("type", "Unknown")
+                rule_description = rule.get("description", "No description available")
+                if "constraints" in rule:
+                    min_tick_size = rule["constraints"].get("min", min_tick_size)
+                    max_tick_size = rule["constraints"].get("max", max_tick_size)
+                if "valid_values" in rule:
+                    predefined_values = set(rule["valid_values"])
 
-        # ✅ Extract constraints and predefined values dynamically
-        min_tick_size, max_tick_size, predefined_values = 1, 9999, set()
-        for rule in ticksize_rules:
-            if "constraints" in rule:
-                min_tick_size = rule["constraints"].get("min", min_tick_size)
-                max_tick_size = rule["constraints"].get("max", max_tick_size)
-            if "valid_values" in rule:
-                predefined_values = set(rule["valid_values"])
+                # ✅ Generalized regex pattern for extracting ticksize_rule_key[]
+                ticksize_pattern = re.compile(
+                    r"\{\s*" + r"\s*".join([rf"{re.escape(col)}\s*=\s*(-?\d+)" for col in sub_columns]) + r"\s*\}"
+                )
 
-        # ✅ Generalized regex pattern for extracting ticksize_rule_key[]
-        ticksize_pattern = re.compile(
-            r"\{\s*" + r"\s*".join([rf"{re.escape(col)}\s*=\s*(-?\d+)" for col in sub_columns]) + r"\s*\}"
-        )
+                print(f"🔹 Generated Regex Pattern: {ticksize_pattern.pattern}")  # ✅ Debugging Output
 
-        print(f"🔹 Generated Regex Pattern: {ticksize_pattern.pattern}")  # ✅ Debugging Output
+                # ✅ Extract all dynamic ticksize_rule_key columns dynamically
+                ticksize_columns_baseline = [col for col in df_merged.columns if re.match(fr"{re.escape(ticksize_rule_key)}\[\d+\]_baseline", col)]
+                ticksize_columns_candidate = [col for col in df_merged.columns if re.match(fr"{re.escape(ticksize_rule_key)}\[\d+\]_candidate", col)]
 
-        # ✅ Extract all dynamic ticksize_rule_key columns dynamically
-        ticksize_columns_baseline = [col for col in df_merged.columns if re.match(fr"{re.escape(ticksize_rule_key)}\[\d+\]_baseline", col)]
-        ticksize_columns_candidate = [col for col in df_merged.columns if re.match(fr"{re.escape(ticksize_rule_key)}\[\d+\]_candidate", col)]
+                print(f"🔹 Extracted ticksize_rule_key columns (Baseline): {ticksize_columns_baseline}")
+                print(f"🔹 Extracted ticksize_rule_key columns (Candidate): {ticksize_columns_candidate}")
 
-        print(f"🔹 Extracted ticksize_rule_key columns (Baseline): {ticksize_columns_baseline}")
-        print(f"🔹 Extracted ticksize_rule_key columns (Candidate): {ticksize_columns_candidate}")
+                # ✅ Iterate over all rows
+                for _, row in df_merged.iterrows():
+                    # ✅ Dynamically build ticksize_rule_key string from identified columns
+                    baseline_str = " ".join(str(row[col]) for col in ticksize_columns_baseline if pd.notna(row[col]))
+                    candidate_str = " ".join(str(row[col]) for col in ticksize_columns_candidate if pd.notna(row[col]))
 
-        # ✅ Iterate over all rows
-        for _, row in df_merged.iterrows():
-            # ✅ Dynamically build ticksize_rule_key string from identified columns
-            baseline_str = " ".join(str(row[col]) for col in ticksize_columns_baseline if pd.notna(row[col]))
-            candidate_str = " ".join(str(row[col]) for col in ticksize_columns_candidate if pd.notna(row[col]))
+                    # ✅ Debugging output
+                    print(f"\nRow Index: {row.name}")
+                    print("Baseline TickSizes Raw String:", baseline_str)
+                    print("Candidate TickSizes Raw String:", candidate_str)
 
-            # ✅ Debugging output
-            print(f"\nRow Index: {row.name}")
-            print("Baseline TickSizes Raw String:", baseline_str)
-            print("Candidate TickSizes Raw String:", candidate_str)
+                    # ✅ Extract matches using regex
+                    baseline_matches = ticksize_pattern.findall(baseline_str)
+                    candidate_matches = ticksize_pattern.findall(candidate_str)
 
-            # ✅ Extract matches using regex
-            baseline_matches = ticksize_pattern.findall(baseline_str)
-            candidate_matches = ticksize_pattern.findall(candidate_str)
+                    print("Regex Matches for Baseline:", baseline_matches)
+                    print("Regex Matches for Candidate:", candidate_matches)
 
-            print("Regex Matches for Baseline:", baseline_matches)
-            print("Regex Matches for Candidate:", candidate_matches)
+                    # ✅ Convert extracted matches into dictionaries
+                    baseline_tickSizes = {idx: {sub_columns[i]: int(m[i]) for i in range(len(sub_columns))} for idx, m in enumerate(baseline_matches) if len(m) == len(sub_columns)}
+                    candidate_tickSizes = {idx: {sub_columns[i]: int(m[i]) for i in range(len(sub_columns))} for idx, m in enumerate(candidate_matches) if len(m) == len(sub_columns)}
 
-            # ✅ Convert extracted matches into dictionaries
-            baseline_tickSizes = {idx: {sub_columns[i]: int(m[i]) for i in range(len(sub_columns))} for idx, m in enumerate(baseline_matches) if len(m) == len(sub_columns)}
-            candidate_tickSizes = {idx: {sub_columns[i]: int(m[i]) for i in range(len(sub_columns))} for idx, m in enumerate(candidate_matches) if len(m) == len(sub_columns)}
+                    # ✅ Iterate over all ticksize_rule_key indices from both datasets -- for arrays
+                    for idx in set(baseline_tickSizes.keys()).union(candidate_tickSizes.keys()):
+                        base_values = baseline_tickSizes.get(idx, {})
+                        cand_values = candidate_tickSizes.get(idx, {})
 
-            # ✅ Iterate over all ticksize_rule_key indices from both datasets
-            for idx in set(baseline_tickSizes.keys()).union(candidate_tickSizes.keys()):
-                base_values = baseline_tickSizes.get(idx, {})
-                cand_values = candidate_tickSizes.get(idx, {})
+                        for field in sub_columns:  # ✅ Iterate dynamically over sub_columns
+                            base_val = base_values.get(field)
+                            cand_val = cand_values.get(field)
 
-                for field in sub_columns:  # ✅ Iterate dynamically over sub_columns
-                    base_val = base_values.get(field)
-                    cand_val = cand_values.get(field)
+                            if "constraints" in rule:
+                                df_merged["rule_violation"] = abs(pd.to_numeric(base_val) - pd.to_numeric(cand_val))
+                                df_merged.loc[df_merged["rule_violation"] <= min_tick_size, "classification"] = rule.get("category", "ACCEPTABLE")
+                                df_merged.loc[df_merged["rule_violation"] >= max_tick_size, "classification"] = rule.get("category", "FATAL")
+                                df_merged.loc[(df_merged["rule_violation"] > min_tick_size) & (df_merged["rule_violation"] < max_tick_size), "classification"] = rule.get("category", "WARNING")
 
-                    # ✅ Log discrepancies for mismatched values
-                    if base_val is not None and cand_val is not None and base_val != cand_val:
-                        discrepancies.append({
-                            key_column: row[key_column],
-                            "Column Name": f"{ticksize_rule_key}[{idx}].{field}",
-                            "Rule Type": "Range check",
-                            "category": "WARNING",
-                            "Rule Number": "1",
-                            "Description": f"Ensure that {ticksize_rule_key}[{idx}] {field} follows the defined constraints.",
-                            "Baseline Field Value": base_val,
-                            "Candidate Field Value": cand_val
-                        })
+                            for _, row in df_merged[df_merged["rule_violation"] > 0].iterrows():
+                                discrepancies.append({
+                                    key_column: row[key_column],
+                                    "Column Name": f"{ticksize_rule_key}[{idx}].{field}",
+                                    "Rule Type": rule_type,
+                                    "category": row["classification"],
+                                    "Rule Number": rule_number,
+                                    "Description": rule_description,
+                                    "Baseline Field Value": base_val,
+                                    "Candidate Field Value": cand_val
+                                })
 
-                    # ✅ Dynamically determine the tick size field
-                    tick_size_field = next((col for col in sub_columns if "tick" in col.lower()), "tickSize")
-
-                    # ✅ Validate tickSize numerical constraints
-                    if field == tick_size_field and cand_val is not None:
-                        if not (min_tick_size <= cand_val <= max_tick_size):
-                            discrepancies.append({
-                                key_column: row[key_column],
-                                "Column Name": f"{ticksize_rule_key}[{idx}].{tick_size_field}",
-                                "Rule Type": "Numerical check",
-                                "category": "ERROR",
-                                "Rule Number": "2",
-                                "Description": f"{tick_size_field} must be between {min_tick_size} and {max_tick_size}.",
-                                "Baseline Field Value": base_val,
-                                "Candidate Field Value": cand_val
-                            })
-
-                        # ✅ Validate tickSize predefined values
-                        if predefined_values and cand_val not in predefined_values:
-                            discrepancies.append({
-                                key_column: row[key_column],
-                                "Column Name": f"{ticksize_rule_key}[{idx}].{tick_size_field}",
-                                "Rule Type": "Predefined values check",
-                                "category": "ERROR",
-                                "Rule Number": "3",
-                                "Description": f"{tick_size_field} must be one of the predefined values: {list(predefined_values)}",
-                                "Baseline Field Value": base_val,
-                                "Candidate Field Value": cand_val
-                            })
-
+        # ✅ For handling normal objects
         for column_name, rules in self.rules_config["rules"].items():
             for rule in rules:
                 if not isinstance(rule, dict):
@@ -367,6 +350,17 @@ class DataProcessor:
                 rule_description = rule.get("description", "No description available")
 
                 for col in rule.get("columns", []):
+
+                    pattern = re.compile(r"{col}\[\d+\]")
+
+                    if any(pattern.fullmatch(col) for col in df_merged.columns):
+                        print("Columns matching 'tickSizes[N]' pattern exist")
+                    else:
+                        print("No matching columns found")
+
+                    matching_columns = [col for col in df_merged.columns if pattern.fullmatch(col)]
+                    print("Matching Columns:", matching_columns)
+
                     col_baseline = f"{col}_baseline"
                     col_candidate = f"{col}_candidate"
 
@@ -376,10 +370,14 @@ class DataProcessor:
 
                         if "constraints" in rule:
                             df_merged["rule_violation"] = abs(pd.to_numeric(df_merged[col_candidate], errors="coerce") - pd.to_numeric(df_merged[col_baseline], errors="coerce"))
+                            df_merged.loc[df_merged["rule_violation"] <= updated_warning_min, "classification"] = rule.get("category", "ACCEPTABLE")
                             df_merged.loc[df_merged["rule_violation"] >= updated_warning_max, "classification"] = rule.get("category", "FATAL")
-                            df_merged.loc[(df_merged["rule_violation"] >= updated_warning_min) & (df_merged["rule_violation"] < updated_warning_max), "classification"] = rule.get("category", "WARNING")
+                            df_merged.loc[(df_merged["rule_violation"] > updated_warning_min) & (df_merged["rule_violation"] < updated_warning_max), "classification"] = rule.get("category", "WARNING")
+                        else:
+                            df_merged["rule_violation"] = df_merged.apply(lambda row: row[col_baseline] != row[col_candidate], axis=1)
+                            df_merged.loc[df_merged["rule_violation"], "classification"] = rule.get("category", "None")
 
-                        for _, row in df_merged[df_merged["classification"] != "ACCEPTABLE"].iterrows():
+                        for _, row in df_merged[df_merged["rule_violation"] > 0].iterrows():
                             discrepancies.append({
                                 key_column: row[key_column],
                                 "Column Name": col,
@@ -390,6 +388,32 @@ class DataProcessor:
                                 "Baseline Field Value": row[col_baseline],
                                 "Candidate Field Value": row[col_candidate]
                             })
+
+        # ✅ Include Missing Rows
+        for _, row in extra_rows_baseline.iterrows():
+            discrepancies.append({
+                key_column: row[key_column],
+                "Column Name": "ALL",
+                "Rule Type": "Missing in Candidate",
+                "category": "INFO",
+                "Rule Number": "Missing_Row_Baseline",
+                "Description": "Row exists in baseline but is missing in candidate.",
+                "Baseline Field Value": row.to_dict(),
+                "Candidate Field Value": "MISSING"
+            })
+
+        for _, row in extra_rows_candidate.iterrows():
+            discrepancies.append({
+                key_column: row[key_column],
+                "Column Name": "ALL",
+                "Rule Type": "Missing in Baseline",
+                "category": "INFO",
+                "Rule Number": "Missing_Row_Candidate",
+                "Description": "Row exists in candidate but is missing in baseline.",
+                "Baseline Field Value": "MISSING",
+                "Candidate Field Value": row.to_dict()
+            })
+        
 
         discrepancies_df = pd.DataFrame(discrepancies)
         discrepancies_df = discrepancies_df.astype(str)

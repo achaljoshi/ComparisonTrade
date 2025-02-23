@@ -1,4 +1,6 @@
-{"rules":{
+{
+    "identifier":"id",
+    "rules":{
     "messageGroup": [
         {
             "type": "Numerical check",
@@ -80,11 +82,14 @@
             "format": "UTC time"
         },
         {
-            "type": "Date check",
+            "type": "Day difference check",
             "Rule Number": "3",
             "columns": [
                 "timestamp"
             ],
+            "constraints": {
+                "min": 172800
+            },
             "description": "The timestamp must be in nanoseconds since epoch.",
             "format": "nanoseconds since epoch"
         }
@@ -177,7 +182,7 @@
             "type": "String check",
             "Rule Number": "1",
             "columns": [
-                "participantLongName"
+                "name"
             ],
             "description": "The participantLongName must be a string representing the full name of the participant.",
             "format": "String"
@@ -186,7 +191,7 @@
             "type": "Predefined values check",
             "Rule Number": "2",
             "columns": [
-                "participantType"
+                "name"
             ],
             "description": "The participantType must be one of the predefined acceptable values.",
             "valid_values": [
@@ -291,7 +296,7 @@
             "type": "Numerical check",
             "Rule Number": "10",
             "columns": [
-                "timestamp"
+                "name"
             ],
             "description": "The timestamp must be a long integer representing the time of the event.",
             "constraints": {
@@ -567,7 +572,7 @@
             "type": "Date check",
             "Rule Number": "8",
             "columns": [
-                "timestamp"
+                "modifier"
             ],
             "description": "The timestamp must be a valid long integer representing the time of issue of the new calculated quantity protection values in UTC time.",
             "format": "Unix timestamp"
@@ -636,7 +641,7 @@
             ],
             "description": "The strike price must not exceed the upper limit defined for the order book.",
             "constraints": {
-                "max": "upperLimit"
+                "max": 1
             },
             "relations": [
                 "upperLimit"
@@ -650,7 +655,7 @@
             ],
             "description": "The strike price must not be below the lower limit defined for the order book.",
             "constraints": {
-                "min": "lowerLimit"
+                "min": 0
             },
             "relations": [
                 "lowerLimit"
@@ -712,7 +717,7 @@
             ],
             "description": "The firstTradingDate must be in the past or present, not a future date.",
             "constraints": {
-                "max": "current date"
+                "max": 1
             },
             "exclusions": []
         }
@@ -739,13 +744,18 @@
             ]
         }
     ],
-    "groxType": [
+    "groupType": [
         {
             "type": "Value check",
             "Rule Number": "1",
             "columns": [
                 "groupType"
             ],
+            "category":"Type 1",
+            "constraints": {
+                "min": 0,
+                "max":1
+            },
             "description": "groupType must be one of the predefined acceptable values.",
             "valid_values": [
                 "0",
@@ -772,6 +782,11 @@
             "columns": [
                 "groupType"
             ],
+            "category":"Type 2",
+            "constraints": {
+                "min":1,
+                "max": 10
+            },
             "description": "Default value for groupType is 0 when it is undefined or not applicable.",
             "default_value": "0"
         }
@@ -833,7 +848,7 @@
             "type": "Value check",
             "Rule Number": "1",
             "columns": [
-                "fixedIncomeType"
+                "sector"
             ],
             "description": "The fixedIncomeType must be one of the predefined acceptable values.",
             "valid_values": [
@@ -853,7 +868,7 @@
             "type": "Value check",
             "Rule Number": "2",
             "columns": [
-                "dayCountConvention"
+                "sector"
             ],
             "description": "The dayCountConvention must be one of the predefined acceptable values.",
             "valid_values": [
@@ -870,7 +885,7 @@
             "type": "Value check",
             "Rule Number": "3",
             "columns": [
-                "action"
+                "sector"
             ],
             "description": "The action must be one of the predefined acceptable values.",
             "valid_values": [
@@ -883,7 +898,7 @@
             "type": "Value check",
             "Rule Number": "4",
             "columns": [
-                "OrderTypeAttributes"
+                "sector"
             ],
             "description": "The OrderTypeAttributes must be one of the predefined acceptable values.",
             "valid_values": [
@@ -905,7 +920,7 @@
             "type": "Value check",
             "Rule Number": "5",
             "columns": [
-                "OrderValidityAttributes"
+                "sector"
             ],
             "description": "The OrderValidityAttributes must be one of the predefined acceptable values.",
             "valid_values": [
@@ -919,9 +934,9 @@
             "type": "Value check",
             "Rule Number": "6",
             "columns": [
-                "groupType"
+                "sector"
             ],
-            "description": "The groupType must be one of the predefined acceptable values.",
+            "description": "The sector must be one of the predefined acceptable values.",
             "valid_values": [
                 "0",
                 "1",
@@ -937,7 +952,7 @@
             "type": "Value check",
             "Rule Number": "7",
             "columns": [
-                "optionType"
+                "sector"
             ],
             "description": "The optionType must be one of the predefined acceptable values.",
             "valid_values": [
@@ -950,7 +965,7 @@
             "type": "Value check",
             "Rule Number": "8",
             "columns": [
-                "optionStyle"
+                "sector"
             ],
             "description": "The optionStyle must be one of the predefined acceptable values.",
             "valid_values": [
@@ -969,7 +984,7 @@
             "type": "Value check",
             "Rule Number": "9",
             "columns": [
-                "currencyUnit"
+                "sector"
             ],
             "description": "The currencyUnit must be one of the predefined acceptable values.",
             "valid_values": [
@@ -982,7 +997,7 @@
             "type": "Value check",
             "Rule Number": "10",
             "columns": [
-                "priceUnit"
+                "sector"
             ],
             "description": "The priceUnit must be one of the predefined acceptable values.",
             "valid_values": [
@@ -1001,7 +1016,7 @@
             "type": "Value check",
             "Rule Number": "11",
             "columns": [
-                "exchangeOrderType"
+                "sector"
             ],
             "description": "The exchangeOrderType must be one of the predefined acceptable values.",
             "valid_values": [
@@ -1025,7 +1040,7 @@
             "type": "Value check",
             "Rule Number": "12",
             "columns": [
-                "orderCategory"
+                "sector"
             ],
             "description": "The orderCategory must be one of the predefined acceptable values.",
             "valid_values": [
@@ -1043,7 +1058,7 @@
             "type": "Value check",
             "Rule Number": "13",
             "columns": [
-                "changeReason"
+                "sector"
             ],
             "description": "The changeReason must be one of the predefined acceptable values.",
             "valid_values": [
@@ -1071,11 +1086,7 @@
             "columns": [
                 "currency"
             ],
-            "description": "The currency field should not be empty and must be a string.",
-            "constraints": {
-                "min_length": 3,
-                "max_length": 3
-            }
+            "description": "The currency field should not be empty and must be a string."
         }
     ],
     "currencyUnit": [
@@ -1132,9 +1143,9 @@
             "type": "Value check",
             "Rule Number": "1",
             "columns": [
-                "matchingType"
+                "contractSize"
             ],
-            "description": "Ensure that the matchingType is one of the predefined acceptable values.",
+            "description": "Ensure that the contractSize is one of the predefined acceptable values.",
             "valid_values": [
                 "0",
                 "1",
@@ -1147,9 +1158,9 @@
             "type": "Default value",
             "Rule Number": "2",
             "columns": [
-                "matchingType"
+                "contractSize"
             ],
-            "description": "Set a default value for matchingType if not provided.",
+            "description": "Set a default value for contractSize if not provided.",
             "default_value": "0"
         }
     ],
@@ -1219,13 +1230,11 @@
         {
             "type": "Numerical check",
             "Rule Number": "1",
+            "category":"tickSizes 1",
             "columns": [
-                "tickSizes"
+                "tickSizes[0]"
             ],
             "description": "Tick sizes must be a positive integer value.",
-            "constraints": {
-                "min": 1
-            },
             "valid_values": [],
             "default_value": null,
             "tolerance": null,
@@ -1234,9 +1243,11 @@
         {
             "type": "Predefined values check",
             "Rule Number": "2",
+            "category":"tickSizes 2",
             "columns": [
-                "tickSizes"
+                "tickSizes[0]"
             ],
+            "format_type":"Array",
             "description": "Tick sizes must be one of the predefined values.",
             "valid_values": [
                 3,
@@ -1401,7 +1412,7 @@
             "type": "String check",
             "Rule Number": "1",
             "columns": [
-                "orderStatus"
+                "active"
             ],
             "description": "The order status must be one of the predefined acceptable values.",
             "valid_values": [
@@ -1412,7 +1423,7 @@
             "type": "String check",
             "Rule Number": "2",
             "columns": [
-                "orderStatus"
+                "active"
             ],
             "description": "The order status 'Active' indicates that the order is currently active in the order book.",
             "valid_values": [
@@ -1425,7 +1436,7 @@
             "type": "Date check",
             "Rule Number": "1",
             "columns": [
-                "calculationTime"
+                "indexMarket"
             ],
             "description": "The date and time of the Index Price calculation must be in UTC.",
             "format": "ISO 8601"
@@ -1434,7 +1445,7 @@
             "type": "Date check",
             "Rule Number": "2",
             "columns": [
-                "distributionTime"
+                "indexMarket"
             ],
             "description": "The date and time of the Index Price distribution must be in UTC.",
             "format": "ISO 8601"
@@ -1443,7 +1454,7 @@
             "type": "Numerical check",
             "Rule Number": "3",
             "columns": [
-                "timestamp"
+                "indexMarket"
             ],
             "description": "The timestamp must be a valid Unix timestamp representing the time at which the message was sent in UTC.",
             "constraints": {
@@ -1454,7 +1465,7 @@
             "type": "Numerical check",
             "Rule Number": "4",
             "columns": [
-                "orderBookId"
+                "indexMarket"
             ],
             "description": "The orderBookId must be a positive integer representing the order book the index price is for.",
             "constraints": {
@@ -1465,7 +1476,7 @@
             "type": "Numerical check",
             "Rule Number": "5",
             "columns": [
-                "price"
+                "indexMarket"
             ],
             "description": "The price must be a valid long integer representing the index price.",
             "constraints": {
@@ -1476,7 +1487,7 @@
             "type": "Numerical check",
             "Rule Number": "6",
             "columns": [
-                "changePrevious"
+                "indexMarket"
             ],
             "description": "The changePrevious must be an integer representing the percentage change since the previous corresponding information dissemination.",
             "constraints": {
@@ -1488,7 +1499,7 @@
             "type": "Numerical check",
             "Rule Number": "7",
             "columns": [
-                "changeYesterday"
+                "indexMarket"
             ],
             "description": "The changeYesterday must be an integer representing the percentage change compared to the previous day's value.",
             "constraints": {
@@ -1500,7 +1511,7 @@
             "type": "Numerical check",
             "Rule Number": "8",
             "columns": [
-                "pointsOfMovement"
+                "indexMarket"
             ],
             "description": "The pointsOfMovement must be an integer representing the change between two index values expressed as number of points.",
             "constraints": {
@@ -2177,11 +2188,7 @@
             "columns": [
                 "contractName"
             ],
-            "description": "The contract name should not be empty and must have a reasonable length.",
-            "constraints": {
-                "min": 1,
-                "max": 255
-            }
+            "description": "The contract name should not be empty and must have a reasonable length."
         }
     ],
     "tradedInGenium": [

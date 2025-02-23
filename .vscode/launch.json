@@ -8,10 +8,12 @@
             "module": "streamlit",
             "args": [
                 "run",
-                "${workspaceFolder}/src/app.py"
+                "${workspaceFolder}/src/app.py",
+                "--logger.level=debug"
             ],
             "console": "integratedTerminal",
             "justMyCode": false,
+            "redirectOutput": true,
             // "env": {
             //     "DIRECTORY_CONFIG_PATH": "${workspaceFolder}/src/directory_config.json",
             //     "JOB_RESPONSE_PATH": "${workspaceFolder}/src/job_creation_response.json",
