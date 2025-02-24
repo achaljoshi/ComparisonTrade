@@ -67,6 +67,27 @@ required_files = {
     "rules_config.json": "rules_config_path"
 }
 
+
+def file_upload():
+    global f, e
+    for file_name, key in missing_files.items():
+        uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=key)
+
+        if uploaded_file is not None:
+            save_path = os.path.join(temp_dir, file_name)  # ✅ Save in a unique temp directory
+
+            try:
+                # ✅ Ensure safe file writing (avoids permission errors)
+                with open(save_path, "wb") as f:
+                    shutil.copyfileobj(uploaded_file, f)  # ✅ Efficient way to copy file content
+
+                uploaded_files[key] = save_path  # ✅ Store path in dictionary
+                st.success(f"`{file_name}` uploaded successfully!")
+
+            except Exception as e:
+                st.error(f"❌ Error saving `{file_name}`: {e}")
+
+
 # ✅ Step 1: Upload Configuration Files
 if st.session_state["screen"] == "upload_config":
     st.title("Upload Configuration Files")
@@ -83,22 +104,7 @@ if st.session_state["screen"] == "upload_config":
 
     temp_dir = tempfile.mkdtemp()
 
-    for file_name, key in missing_files.items():
-        uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=key)
-
-        if uploaded_file is not None:
-            save_path = os.path.join(temp_dir, file_name)  # ✅ Save in a unique temp directory
-            
-            try:
-                # ✅ Ensure safe file writing (avoids permission errors)
-                with open(save_path, "wb") as f:
-                    shutil.copyfileobj(uploaded_file, f)  # ✅ Efficient way to copy file content
-                
-                uploaded_files[key] = save_path  # ✅ Store path in dictionary
-                st.success(f"`{file_name}` uploaded successfully!")
-
-            except Exception as e:
-                st.error(f"❌ Error saving `{file_name}`: {e}")
+    file_upload()
 
     # ✅ Debugging: Display uploaded file paths (for verification)
     # st.write("Uploaded file paths:", uploaded_files)
@@ -245,66 +251,71 @@ else:
 st.sidebar.header("🔍 Filter Rules")
 selected_filters = st.session_state.get("selected_filters", {})
 
-for column_name, rules in rules_config.get("rules", {}).items():
-    for rule in rules:
-        if not isinstance(rule, dict):
-            continue  # Skip invalid rules
 
-        rule_number = rule.get("Rule Number", "Unknown Rule")
-        rule_type = rule.get("type", "Unknown Type")
-        rule_columns = ", ".join(rule.get("columns", [])) if rule.get("columns") else "N/A"
+def get_rules_sidebar():
+    for column_name, rules in rules_config.get("rules", {}).items():
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue  # Skip invalid rules
 
-        st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
-        st.sidebar.write(f"📝 Columns: {rule_columns}")
-        st.sidebar.write(f"📄 Description: {rule.get('description', 'No description available')}")
+            rule_number = rule.get("Rule Number", "Unknown Rule")
+            rule_type = rule.get("type", "Unknown Type")
+            rule_columns = ", ".join(rule.get("columns", [])) if rule.get("columns") else "N/A"
 
-        # Ensure dictionary structure exists
-        selected_filters.setdefault(column_name, {}).setdefault(rule_number, {})
+            st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
+            st.sidebar.write(f"📝 Columns: {rule_columns}")
+            st.sidebar.write(f"📄 Description: {rule.get('description', 'No description available')}")
 
-        # ✅ Unique keys by including `column_name` + `rule_number`
-        unique_key_prefix = f"{column_name}_{rule_number}"
+            # Ensure dictionary structure exists
+            selected_filters.setdefault(column_name, {}).setdefault(rule_number, {})
 
-        # Handle constraints and valid values
-        if "constraints" in rule:
-            for constraint_key, constraint_value in rule["constraints"].items():
-                prev_value = selected_filters[column_name][rule_number].get(constraint_key, constraint_value)
-                new_value = st.sidebar.number_input(
-                    f"{constraint_key} for {rule_number}",
-                    value=prev_value,
-                    key=f"{unique_key_prefix}_{constraint_key}"  # ✅ Unique key
+            # ✅ Unique keys by including `column_name` + `rule_number`
+            unique_key_prefix = f"{column_name}_{rule_number}"
+
+            # Handle constraints and valid values
+            if "constraints" in rule:
+                for constraint_key, constraint_value in rule["constraints"].items():
+                    prev_value = selected_filters[column_name][rule_number].get(constraint_key, constraint_value)
+                    new_value = st.sidebar.number_input(
+                        f"{constraint_key} for {rule_number}",
+                        value=prev_value,
+                        key=f"{unique_key_prefix}_{constraint_key}"  # ✅ Unique key
+                    )
+                    selected_filters[column_name][rule_number][constraint_key] = new_value
+
+            # Handle valid values (dropdown if applicable)
+            valid_values = rule.get("valid_values", [])
+
+            # Set default to first value in the list if available, otherwise default to None
+            prev_value = selected_filters[column_name][rule_number].get("valid_value",
+                                                                        valid_values[0] if valid_values else None)
+
+            # Ensure Streamlit doesn't break when valid_values is empty
+            if valid_values:
+                new_value = st.sidebar.selectbox(
+                    f"Valid Values for {rule_number}",
+                    valid_values,
+                    index=valid_values.index(prev_value) if prev_value in valid_values else 0,
+                    key=f"{column_name}_{rule_number}_valid_value"  # Unique key
                 )
-                selected_filters[column_name][rule_number][constraint_key] = new_value
+                selected_filters[column_name][rule_number]["valid_value"] = new_value
+            else:
+                st.sidebar.warning(f"No valid values available for rule {rule_number}. Skipping selection.")
 
-        # Handle valid values (dropdown if applicable)
-        valid_values = rule.get("valid_values", [])
-
-        # Set default to first value in the list if available, otherwise default to None
-        prev_value = selected_filters[column_name][rule_number].get("valid_value", valid_values[0] if valid_values else None)
-
-        # Ensure Streamlit doesn't break when valid_values is empty
-        if valid_values:
-            new_value = st.sidebar.selectbox(
-                f"Valid Values for {rule_number}",
-                valid_values,
-                index=valid_values.index(prev_value) if prev_value in valid_values else 0,
-                key=f"{column_name}_{rule_number}_valid_value"  # Unique key
-            )
-            selected_filters[column_name][rule_number]["valid_value"] = new_value
-        else:
-            st.sidebar.warning(f"No valid values available for rule {rule_number}. Skipping selection.")
+            # Handle sub_columns (Nested objects)
+            if "sub_columns" in rule:
+                for sub_column in rule["sub_columns"]:
+                    st.sidebar.markdown(f"🔹 **Sub-column: {sub_column}**")
+                    prev_value = selected_filters[column_name][rule_number].get(sub_column, "")
+                    new_value = st.sidebar.text_input(
+                        f"Enter value for {sub_column} in {rule_number}",
+                        value=prev_value,
+                        key=f"{unique_key_prefix}_{sub_column}"  # ✅ Unique key
+                    )
+                    selected_filters[column_name][rule_number][sub_column] = new_value
 
 
-        # Handle sub_columns (Nested objects)
-        if "sub_columns" in rule:
-            for sub_column in rule["sub_columns"]:
-                st.sidebar.markdown(f"🔹 **Sub-column: {sub_column}**")
-                prev_value = selected_filters[column_name][rule_number].get(sub_column, "")
-                new_value = st.sidebar.text_input(
-                    f"Enter value for {sub_column} in {rule_number}",
-                    value=prev_value,
-                    key=f"{unique_key_prefix}_{sub_column}"  # ✅ Unique key
-                )
-                selected_filters[column_name][rule_number][sub_column] = new_value
+get_rules_sidebar()
 
 # Store the selected filters in session state
 st.session_state["selected_filters"] = selected_filters
@@ -320,45 +331,44 @@ if reset_filter_clicked:
     st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
     st.rerun()
 
+
+def apply_filter():
+    global processor, file_type, baseline_bytes, candidate_bytes, df_baseline, df_candidate
+    # ✅ Initialize Processor
+    processor = DataProcessor(
+        st.session_state["directory_config_path"],
+        st.session_state["job_response_path"],
+        st.session_state["rules_config_path"]
+    )
+    file_type = st.session_state["file_type"]
+    # ✅ Convert uploaded files to `BytesIO` for efficient processing
+    baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
+    candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
+    # ✅ Reset file pointer before reading
+    baseline_bytes.seek(0)
+    candidate_bytes.seek(0)
+    # ✅ Read files using `read_file()`
+    df_baseline = processor.read_file(baseline_bytes, file_type)
+    df_candidate = processor.read_file(candidate_bytes, file_type)
+    # ✅ Ensure files are not empty
+    if df_baseline.empty or df_candidate.empty:
+        st.error("One of the uploaded files is empty. Please check your data.")
+        st.stop()
+    # ✅ Apply filters dynamically
+    updated_results = processor.compare_files(
+        df_baseline, df_candidate, file_type, st.session_state["selected_filters"]
+    )
+    # ✅ Store updated results in session state
+    st.session_state["results"] = updated_results
+    st.session_state["filtered_results"] = updated_results
+    st.success("✅ Filters Applied Successfully!")
+    st.rerun()
+
+
 # ✅ Apply Filters
 if apply_filter_clicked and "results" in st.session_state:
     try:
-        # ✅ Initialize Processor
-        processor = DataProcessor(
-            st.session_state["directory_config_path"],
-            st.session_state["job_response_path"],
-            st.session_state["rules_config_path"]
-        )
-
-        file_type = st.session_state["file_type"]
-
-        # ✅ Convert uploaded files to `BytesIO` for efficient processing
-        baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
-        candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
-
-        # ✅ Reset file pointer before reading
-        baseline_bytes.seek(0)
-        candidate_bytes.seek(0)
-
-        # ✅ Read files using `read_file()`
-        df_baseline = processor.read_file(baseline_bytes, file_type)
-        df_candidate = processor.read_file(candidate_bytes, file_type)
-
-        # ✅ Ensure files are not empty
-        if df_baseline.empty or df_candidate.empty:
-            st.error("One of the uploaded files is empty. Please check your data.")
-            st.stop()
-
-        # ✅ Apply filters dynamically
-        updated_results = processor.compare_files(
-            df_baseline, df_candidate, file_type, st.session_state["selected_filters"]
-        )
-
-        # ✅ Store updated results in session state
-        st.session_state["results"] = updated_results
-        st.session_state["filtered_results"] = updated_results
-        st.success("✅ Filters Applied Successfully!")
-        st.rerun()
+        apply_filter()
 
     except Exception as e:
         st.error(f"Error applying filters: {str(e)}")
@@ -380,19 +390,17 @@ if job_response_path and os.path.exists(job_response_path):
 else:
     job_response = None
 
-if not filtered_results.empty and job_response:
+
+def get_file_name():
     # ✅ Generate Filename Using Job Response Data
     baseline_env = job_response["baseline"]["env"]
     candidate_env = job_response["candidate"]["env"]
     baseline_label = job_response["baseline"]["label"]
     candidate_label = job_response["candidate"]["label"]
-
     filename = f"discrepancy_report_{baseline_env}_{candidate_env}_{baseline_label}_{candidate_label}"
-
     # ✅ Export Data Based on Format
     export_data = None
     mime_type = "text/plain"
-
     if export_format == "CSV":
         export_data = filtered_results.to_csv(index=False).encode("utf-8")
         filename += ".csv"
@@ -415,7 +423,6 @@ if not filtered_results.empty and job_response:
         export_data = filtered_results.to_string(index=False).encode("utf-8")
         filename += ".txt"
         mime_type = "text/plain"
-
     if export_data:
         st.download_button(
             label="📥 Download Report",
@@ -426,29 +433,28 @@ if not filtered_results.empty and job_response:
     else:
         st.warning("Unsupported export format. Defaulting to CSV.")
 
+
+if not filtered_results.empty and job_response:
+    get_file_name()
+
 # ✅ Display Results
 filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
 
-if not filtered_results.empty:
-    st.header("📊 Key Performance Indicators")
 
+def get_key_performance():
+    global count
+    st.header("📊 Key Performance Indicators")
     # ✅ Ensure consistent capitalization in category column
     filtered_results["category"] = filtered_results["category"].str.upper()
-
     # ✅ Count each unique category dynamically
     category_counts = filtered_results["category"].value_counts().to_dict()
-
-
     # ✅ Identify Missing Rows
     missing_baseline_count = (filtered_results["Rule Type"] == "Missing in Baseline").sum()
     missing_candidate_count = (filtered_results["Rule Type"] == "Missing in Candidate").sum()
-
     # ✅ Total metrics to display
     total_metrics = len(category_counts) + 3  # Dynamic categories + threshold + missing rows
-
     # ✅ Create correct number of columns
     kpi_columns = st.columns(min(total_metrics, 4))  # Limit to 4 columns for layout readability
-
     # ✅ Display each category dynamically
     i = 0
     kpi_columns[i % len(kpi_columns)].metric("🔍 Total Discrepancies", len(filtered_results))
@@ -456,11 +462,9 @@ if not filtered_results.empty:
     for category, count in category_counts.items():
         kpi_columns[i % len(kpi_columns)].metric(f"{category}", count)
         i += 1
-
     kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Baseline", missing_baseline_count)
     i += 1
     kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Candidate", missing_candidate_count)
-
     # ✅ Extract unique categories dynamically
     unique_categories = filtered_results["category"].unique()
     # ✅ Generate distinct colors dynamically using Plotly's color palette
@@ -480,16 +484,18 @@ if not filtered_results.empty:
         color_discrete_map=color_map  # ✅ Now dynamically generated
     )
     st.plotly_chart(fig, use_container_width=True)
-
-
     # ✅ **Pie Chart: category Distribution**
     st.header("Discrepancy Distribution")
     pie_chart = px.pie(filtered_results, names="category", title="Proportion of Discrepancy Types", hole=0.4)
     st.plotly_chart(pie_chart, use_container_width=True)
-
     # ✅ **Filtered Data Table Based on Selected Column**
     st.header("Discrepancy Details")
     st.dataframe(filtered_results)
+
+
+if not filtered_results.empty:
+    get_key_performance()
+
 
 def add_logo():
     st.markdown(
