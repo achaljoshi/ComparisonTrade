@@ -8,6 +8,7 @@ from utils.data_processor import DataProcessor
 import plotly.colors
 import shutil
 import tempfile
+from pathlib import Path
 import logging
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -124,13 +125,13 @@ if st.session_state["screen"] == "file_type_selection":
     st.title("Select File Type for Comparison")
 
     # File type selection from UI
-    file_type = st.radio("Choose the file type:", ["Excel (.xlsx)", "DD (.log, .csv)", "Text Files (.txt)"])
+    file_type = st.radio("Choose the file type:", ["DD (.txt)", "Excel (.xlsx)",  "Flat Files (.txt, .csv, .json, .log)"])
 
     # Mapping UI file type selection to simplified values
     file_type_mapping = {
         "Excel (.xlsx)": "Excel",
-        "DD (.log, .csv)": "DD",
-        "Text Files (.txt)": "Text"
+        "DD (.txt)": "DD",
+        "Flat Files (.txt, .csv, .json, .log)": "Text"
     }
 
     if st.button("Next", key="next_button_file_type"):
@@ -145,43 +146,75 @@ if st.session_state["screen"] == "file_type_selection":
 if st.session_state["screen"] == "file_selection":
     st.title("Upload Files for Comparison")
 
-    uploaded_file_baseline = st.file_uploader("Upload Baseline File", type=["xlsx", "log", "txt", "csv"], key="baseline_file")
-    uploaded_file_candidate = st.file_uploader("Upload Candidate File", type=["xlsx", "log", "txt", "csv"], key="candidate_file")
+    uploaded_file_baseline = st.file_uploader(
+        "Upload Baseline File", type=["xlsx", "txt", "csv", "json", "log"], key="baseline_file"
+    )
+    uploaded_file_candidate = st.file_uploader(
+        "Upload Candidate File", type=["xlsx", "txt", "csv", "json", "log"], key="candidate_file"
+    )
 
     if st.button("Run Comparison", key="run_comparison_button"):
         if uploaded_file_baseline and uploaded_file_candidate:
             try:
+                # ✅ Initialize Data Processor
                 processor = DataProcessor(
                     st.session_state["directory_config_path"],
                     st.session_state["job_response_path"],
                     st.session_state["rules_config_path"]
                 )
-                file_type = st.session_state["file_type"]
-                if file_type == "Excel":
-                    df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
-                    df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
-                elif file_type in ["Text", "DD"]:
-                    delimiter = processor.rules_config.get("text_file_delimiter", ",")
-                    header = 0 if processor.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
-                    df_baseline = pd.read_csv(uploaded_file_baseline, delimiter=delimiter, header=header)
-                    df_candidate = pd.read_csv(uploaded_file_candidate, delimiter=delimiter, header=header)
-                else:
-                    st.error("Unsupported file type selected.")
-                    st.stop()
 
-                # ✅ Run Comparison
-                st.write("✅ Uploaded files are successfully read as DataFrames.")
+                file_type = st.session_state["file_type"]
+
+                # ✅ Auto-detect file type based on extension
+                def detect_file_type(file):
+                    filename = file.name.lower()
+                    if filename.endswith(".xlsx") or filename.endswith(".xls") and file_type == "Excel":
+                        return "Excel"
+                    elif filename.endswith(".txt") and file_type == "DD":
+                        return "DD"
+                    elif filename.endswith(".txt") and file_type == "Text":
+                        return "TEXT"
+                    elif filename.endswith(".csv") and file_type == "Text":
+                        return "CSV"
+                    elif filename.endswith(".json") and file_type == "Text":
+                        return "JSON"
+                    elif filename.endswith(".log") and file_type == "Text":
+                        return "LOG"
+                    else:
+                        raise ValueError("Unsupported file format.")
+
+                file_type = detect_file_type(uploaded_file_baseline)
+                st.session_state["file_type"] = file_type  # ✅ Ensure file type is set in session
+
+                # ✅ Convert uploaded files to `BytesIO`
+                baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
+                candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
+
+                # ✅ Reset file pointer before reading (important for Streamlit uploads)
+                baseline_bytes.seek(0)
+                candidate_bytes.seek(0)
+
+                # ✅ Read files using `read_file()` from DataProcessor
+                df_baseline = processor.read_file(baseline_bytes, file_type)
+                df_candidate = processor.read_file(candidate_bytes, file_type)
+
+                # ✅ Debugging: Display sample data
+                st.write("✅ Uploaded files successfully converted to DataFrames.")
+                print("✅ Baseline DataFrame:\n", df_baseline.head())
+                print("✅ Candidate DataFrame:\n", df_candidate.head())
+
+                # ✅ Ensure files are not empty
                 if df_baseline.empty or df_candidate.empty:
                     st.error("One of the uploaded files is empty. Please check your data.")
                     st.stop()
-                results = processor.compare_files(df_baseline, df_candidate, st.session_state["file_type"])
-                st.success("Comparison Completed! Discrepancy report generated.")
+
+                # ✅ Run Comparison
+                results = processor.compare_files(df_baseline, df_candidate, file_type)
+                st.success("✅ Comparison Completed! Discrepancy report generated.")
 
                 # ✅ Store results in session state
                 st.session_state["results"] = results
                 st.session_state["filtered_results"] = results
-                st.session_state["uploaded_file_baseline"] = uploaded_file_baseline
-                st.session_state["uploaded_file_candidate"] = uploaded_file_candidate
 
             except Exception as e:
                 st.error(f"Error processing files: {str(e)}")
@@ -197,39 +230,72 @@ else:
 
 # ✅ Sidebar: Dynamic Filters
 st.sidebar.header("🔍 Filter Rules")
-selected_filters = st.session_state["selected_filters"]
+selected_filters = st.session_state.get("selected_filters", {})
 
-for rule in rules_config.get("rules", []):
-    if not isinstance(rule, dict):
-        continue  # Skip invalid rules
+for column_name, rules in rules_config.get("rules", {}).items():
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue  # Skip invalid rules
 
-    rule_number = rule.get("Rule Number", "Unknown Rule")
-    rule_type = rule.get("type", "Unknown Type")
-    rule_columns = ", ".join(rule.get("columns", [])) if rule.get("columns") else "N/A"
+        rule_number = rule.get("Rule Number", "Unknown Rule")
+        rule_type = rule.get("type", "Unknown Type")
+        rule_columns = ", ".join(rule.get("columns", [])) if rule.get("columns") else "N/A"
 
-    st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
-    st.sidebar.write(f"📝 Columns: {rule_columns}")
-    
-    selected_filters.setdefault(rule_number, {})
+        st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
+        st.sidebar.write(f"📝 Columns: {rule_columns}")
+        st.sidebar.write(f"📄 Description: {rule.get('description', 'No description available')}")
 
-    for key, value in rule.items():
-        if isinstance(value, (int, float, dict)):
-            if isinstance(value, dict):
-                for sub_key, sub_value in value.items():
-                    input_key = f"{key}_{sub_key}"
-                    prev_value = selected_filters[rule_number].get(input_key, sub_value)
-                    new_value = st.sidebar.number_input(
-                        f"{key} ({sub_key}) for {rule_number}", value=prev_value, key=f"{rule_number}_{input_key}"
-                    )
-                    selected_filters[rule_number][input_key] = new_value
-            else:
-                prev_value = selected_filters[rule_number].get(key, value)
+        # Ensure dictionary structure exists
+        selected_filters.setdefault(column_name, {}).setdefault(rule_number, {})
+
+        # ✅ Unique keys by including `column_name` + `rule_number`
+        unique_key_prefix = f"{column_name}_{rule_number}"
+
+        # Handle constraints and valid values
+        if "constraints" in rule:
+            for constraint_key, constraint_value in rule["constraints"].items():
+                prev_value = selected_filters[column_name][rule_number].get(constraint_key, constraint_value)
                 new_value = st.sidebar.number_input(
-                    f"{key} for {rule_number}", value=prev_value, key=f"{rule_number}_{key}"
+                    f"{constraint_key} for {rule_number}",
+                    value=prev_value,
+                    key=f"{unique_key_prefix}_{constraint_key}"  # ✅ Unique key
                 )
-                selected_filters[rule_number][key] = new_value
+                selected_filters[column_name][rule_number][constraint_key] = new_value
 
+        # Handle valid values (dropdown if applicable)
+        valid_values = rule.get("valid_values", [])
+
+        # Set default to first value in the list if available, otherwise default to None
+        prev_value = selected_filters[column_name][rule_number].get("valid_value", valid_values[0] if valid_values else None)
+
+        # Ensure Streamlit doesn't break when valid_values is empty
+        if valid_values:
+            new_value = st.sidebar.selectbox(
+                f"Valid Values for {rule_number}",
+                valid_values,
+                index=valid_values.index(prev_value) if prev_value in valid_values else 0,
+                key=f"{column_name}_{rule_number}_valid_value"  # Unique key
+            )
+            selected_filters[column_name][rule_number]["valid_value"] = new_value
+        else:
+            st.sidebar.warning(f"No valid values available for rule {rule_number}. Skipping selection.")
+
+
+        # Handle sub_columns (Nested objects)
+        if "sub_columns" in rule:
+            for sub_column in rule["sub_columns"]:
+                st.sidebar.markdown(f"🔹 **Sub-column: {sub_column}**")
+                prev_value = selected_filters[column_name][rule_number].get(sub_column, "")
+                new_value = st.sidebar.text_input(
+                    f"Enter value for {sub_column} in {rule_number}",
+                    value=prev_value,
+                    key=f"{unique_key_prefix}_{sub_column}"  # ✅ Unique key
+                )
+                selected_filters[column_name][rule_number][sub_column] = new_value
+
+# Store the selected filters in session state
 st.session_state["selected_filters"] = selected_filters
+
 
 # ✅ Buttons
 apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
@@ -243,31 +309,47 @@ if reset_filter_clicked:
 
 # ✅ Apply Filters
 if apply_filter_clicked and "results" in st.session_state:
-    processor = DataProcessor(
-        st.session_state["directory_config_path"],
-        st.session_state["job_response_path"],
-        st.session_state["rules_config_path"]
-    )
-    file_type = st.session_state["file_type"]
-    if file_type == "Excel":
-        df_baseline = pd.read_excel(uploaded_file_baseline, engine="openpyxl")
-        df_candidate = pd.read_excel(uploaded_file_candidate, engine="openpyxl")
-    elif file_type in ["Text", "DD"]:
-        delimiter = processor.rules_config.get("text_file_delimiter", ",")
-        header = 0 if processor.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
-        df_baseline = pd.read_csv(uploaded_file_baseline, delimiter=delimiter, header=header)
-        df_candidate = pd.read_csv(uploaded_file_candidate, delimiter=delimiter, header=header)
-    else:
-        st.error("Unsupported file type selected.")
-        st.stop()
+    try:
+        # ✅ Initialize Processor
+        processor = DataProcessor(
+            st.session_state["directory_config_path"],
+            st.session_state["job_response_path"],
+            st.session_state["rules_config_path"]
+        )
 
-    updated_results = processor.compare_files(
-        df_baseline, df_candidate, st.session_state["file_type"], st.session_state["selected_filters"]
-    )
+        file_type = st.session_state["file_type"]
 
-    st.session_state["results"] = updated_results
-    st.session_state["filtered_results"] = updated_results
-    st.rerun()
+        # ✅ Convert uploaded files to `BytesIO` for efficient processing
+        baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
+        candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
+
+        # ✅ Reset file pointer before reading
+        baseline_bytes.seek(0)
+        candidate_bytes.seek(0)
+
+        # ✅ Read files using `read_file()`
+        df_baseline = processor.read_file(baseline_bytes, file_type)
+        df_candidate = processor.read_file(candidate_bytes, file_type)
+
+        # ✅ Ensure files are not empty
+        if df_baseline.empty or df_candidate.empty:
+            st.error("One of the uploaded files is empty. Please check your data.")
+            st.stop()
+
+        # ✅ Apply filters dynamically
+        updated_results = processor.compare_files(
+            df_baseline, df_candidate, file_type, st.session_state["selected_filters"]
+        )
+
+        # ✅ Store updated results in session state
+        st.session_state["results"] = updated_results
+        st.session_state["filtered_results"] = updated_results
+        st.success("✅ Filters Applied Successfully!")
+        st.rerun()
+
+    except Exception as e:
+        st.error(f"Error applying filters: {str(e)}")
+
 
 # **📤 Export Button**
 filtered_results = st.session_state.get("filtered_results", pd.DataFrame())

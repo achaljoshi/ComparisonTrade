@@ -1231,18 +1231,8 @@
             "type": "Numerical check",
             "Rule Number": "1",
             "category":"tickSizes 1",
-            "format_type":"Array",
             "columns": [
-                "tickSizes"
-            ],
-            "constraints": {
-                "min": 1,
-                "max":10
-            },
-            "sub_columns": [
-                "lowerLimit",
-                "upperLimit",
-                "tickSize"
+                "tickSizes[0]"
             ],
             "description": "Tick sizes must be a positive integer value.",
             "valid_values": [],
@@ -1255,16 +1245,7 @@
             "Rule Number": "2",
             "category":"tickSizes 2",
             "columns": [
-                "tickSizes"
-            ],
-            "constraints": {
-                "min": 10,
-                "max":50
-            },
-            "sub_columns": [
-                "lowerLimit",
-                "upperLimit",
-                "tickSize"
+                "tickSizes[0]"
             ],
             "format_type":"Array",
             "description": "Tick sizes must be one of the predefined values.",

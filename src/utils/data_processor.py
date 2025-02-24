@@ -3,7 +3,7 @@ import os
 import re
 from io import BytesIO
 from pathlib import Path
-
+from typing import Generator, Union
 import pandas as pd
 
 
@@ -82,8 +82,8 @@ class DataProcessor:
 
         return input_file_baseline, input_file_candidate, output_file_result
 
-    def read_dd_file(self, file_path: Path) -> pd.DataFrame:
-        """Reads a structured text file and extracts nested objects and array-based fields dynamically."""
+    def read_dd_file(self, file: Union[str, BytesIO], chunk_size=100000) -> Generator[pd.DataFrame, None, None]:
+        """Reads a structured DD file, handling nested objects & arrays dynamically while processing large files in chunks."""
 
         records = []
         current_record = {}
@@ -95,69 +95,82 @@ class DataProcessor:
         array_fields = {key: rule["sub_columns"] for key, rules in self.rules_config["rules"].items() for rule in rules
                         if rule.get("format_type", "").lower() == "array" and "sub_columns" in rule}
 
-        with open(file_path, "r") as file:
-            for line in file:
-                line = line.strip()
+        # ✅ Handle both file paths and uploaded files (BytesIO)
+        if isinstance(file, BytesIO):  # Handle Streamlit file uploader
+            file.seek(0)  # Ensure we start reading from the beginning
+            file = file.read().decode("utf-8", errors="replace").splitlines()  # Read as string & split into lines
+        elif isinstance(file, (str, Path)):  # Handle file paths
+            with open(file, "r", encoding="utf-8", errors="replace") as f:
+                file = f.readlines()
 
-                # Start of a new record
-                if line == "{":
-                    if inside_record:
-                        stack.append((current_record, current_key))
-                        current_record = {}
-                    inside_record = True
+        # ✅ Stream file line-by-line (efficient memory usage)
+        for line in file:
+            line = line.strip()
+
+            # ✅ Start a new record
+            if line == "{":
+                if inside_record:
+                    stack.append((current_record, current_key))
+                    current_record = {}
+                inside_record = True
+                continue
+
+            # ✅ End of a record or nested object
+            elif line == "}":
+                if stack:
+                    parent_record, parent_key = stack.pop()
+                    parent_record[parent_key] = current_record  # Assign nested object to its parent key
+                    current_record = parent_record  # Restore previous context
+                    current_key = None
+                else:
+                    records.append(current_record)  # Store complete record
+                    current_record = {}
+                    inside_record = False  # End of full record
+
+                # ✅ Process chunk if size exceeds threshold
+                if len(records) >= chunk_size:
+                    yield pd.DataFrame(records)  # ✅ Yield DataFrame chunk
+                    records = []  # ✅ Reset records list
+
+                continue
+
+            # Handle key-value pairs
+            if "=" in line:
+                key, value = map(str.strip, line.split("=", 1))
+
+                if line.__contains__("[") and line.__contains__("]"):
+                    array_match = re.match(r"(\w+)\s*=\s*(\[.*\])", line)
+                    if array_match:
+                        arr_key, arr_values = array_match.groups()
+
+                        if arr_key in array_fields:
+                            array_data = {int(k): int(v) for k, v in re.findall(r"\[(\d+)=(\d+)\]", arr_values)}
+                            current_record[arr_key] = array_data
+                        continue
+
+                # Handle nested object start
+                if value.startswith("{") and not value.endswith("}"):
+                    current_key = key
+                    stack.append((current_record, current_key))
+                    current_record = {}
                     continue
 
-                # End of a record or nested object
-                elif line == "}":
-                    if stack:
-                        parent_record, parent_key = stack.pop()
-                        parent_record[parent_key] = current_record  # Assign nested object to its parent key
-                        current_record = parent_record  # Restore previous context
-                        current_key = None
-                    else:
-                        records.append(current_record)  # Store complete record
-                        current_record = {}
-                        inside_record = False  # End of full record
+                # Inline nested object parsing
+                if value.startswith("{") and value.endswith("}"):
+                    current_record[key] = self.parse_nested_object(value)
                     continue
 
-                # Handle key-value pairs
-                if "=" in line:
-                    key, value = map(str.strip, line.split("=", 1))
+                # Array parsing
+                if "[" in value and "]" in value:
+                    current_record[key] = self.parse_array(value)
+                    continue
 
-                    if line.__contains__("[") and line.__contains__("]"):
-                        array_match = re.match(r"(\w+)\s*=\s*(\[.*\])", line)
-                        if array_match:
-                            arr_key, arr_values = array_match.groups()
+                # Default key-value assignment
+                current_record[key] = value
 
-                            if arr_key in array_fields:
-                                array_data = {int(k): int(v) for k, v in re.findall(r"\[(\d+)=(\d+)\]", arr_values)}
-                                current_record[arr_key] = array_data
-                            continue
-
-                    # Handle nested object start
-                    if value.startswith("{") and not value.endswith("}"):
-                        current_key = key
-                        stack.append((current_record, current_key))
-                        current_record = {}
-                        continue
-
-                    # Inline nested object parsing
-                    if value.startswith("{") and value.endswith("}"):
-                        current_record[key] = self.parse_nested_object(value)
-                        continue
-
-                    # Array parsing
-                    if "[" in value and "]" in value:
-                        current_record[key] = self.parse_array(value)
-                        continue
-
-                    # Default key-value assignment
-                    current_record[key] = value
-
-        # Convert parsed records into DataFrame
-        df = pd.DataFrame(records)
-
-        return df
+        # ✅ Process remaining records
+        if records:
+            yield pd.DataFrame(records)
 
     def parse_nested_object(self, text):
         if not isinstance(text, str):
@@ -180,34 +193,100 @@ class DataProcessor:
 
         return array_data
 
-    def read_logs_file(self, file_path: Path) -> pd.DataFrame:
-        """Read a DD file (.log or .csv) with appropriate delimiters."""
-        if file_path.suffix.lower() == ".log":
-            return pd.read_csv(file_path, delimiter="|", header=0)
-        elif file_path.suffix.lower() == ".csv":
-            return pd.read_csv(file_path, delimiter=",", header=0)
-        else:
-            raise ValueError(f"Unsupported DD file format: {file_path.suffix}")
+    def read_logs_file(self, file: Union[str, Path, BytesIO], file_type: str, chunk_size=100000) -> pd.DataFrame:
+        """Reads various log-based files (.log, .csv, .txt, .json) with chunking support."""
 
-    def read_file(self, file_path: Path, file_type: str) -> pd.DataFrame:
-        """Determine file type and read accordingly."""
-        if file_type == "Text":
-            return self.read_logs_file(file_path)
-        elif file_type == "DD":
-            return self.read_dd_file(file_path)
-        elif file_type == "Excel" and file_path.suffix.lower() in [".xlsx", ".xls"]:
-            return pd.read_excel(file_path, engine="openpyxl")
+        # ✅ Handle Streamlit `BytesIO` uploaded files
+        if isinstance(file, BytesIO) or hasattr(file, "read"):
+            file.seek(0)  # Reset pointer for reading
+            file_name = getattr(file, "name", "uploaded_file")
+            file_suffix = Path(file_name).suffix.lower()
         else:
-            raise ValueError(f"Unsupported file type: {file_path.suffix}")
+            file_suffix = Path(file).suffix.lower()
+
+        # ✅ Read `.log` files (pipe `|` delimited)
+        if file_type == "LOG":
+            return pd.concat(pd.read_csv(file, delimiter="|", encoding="utf-8", encoding_errors="replace", chunksize=chunk_size), ignore_index=True)
+
+        # ✅ Read `.csv` files
+        elif file_type == "CSV":
+            return pd.concat(pd.read_csv(file, encoding="utf-8", encoding_errors="replace", chunksize=chunk_size), ignore_index=True)
+
+        # ✅ Read `.txt` files with configurable delimiter
+        elif file_type == "TEXT":
+            delimiter = self.rules_config.get("text_file_delimiter", ",")
+            header = 0 if self.rules_config.get("text_file_contains_header", "yes").lower() == "yes" else None
+            return pd.concat(pd.read_csv(file, delimiter=delimiter, header=header, encoding="utf-8", encoding_errors="replace", chunksize=chunk_size), ignore_index=True)
+
+        # ✅ Read `.json` files (auto-detects if it's list or dict format)
+        elif file_type == "JSON":
+            try:
+                data = json.load(file) if isinstance(file, BytesIO) else json.load(open(file, "r", encoding="utf-8"))
+                return pd.json_normalize(data) if isinstance(data, list) else pd.DataFrame([data])
+            except json.JSONDecodeError:
+                raise ValueError("Invalid JSON format in file.")
+
+        else:
+            raise ValueError(f"Unsupported file format: {file_suffix}")
+    
+    def read_excel_file(self, file, chunk_size=100000) -> pd.DataFrame:
+        """Reads an Excel file efficiently using chunks (if needed)."""
+        df = pd.read_excel(file, engine="openpyxl")  # ✅ Read normally
+        if len(df) > chunk_size:  # ✅ If file is too large, process in chunks
+            chunks = [df[i:i+chunk_size] for i in range(0, len(df), chunk_size)]
+            return pd.concat(chunks, ignore_index=True)
+        return df
+
+    def read_file(self, file, file_type: str, chunk_size=100000) -> pd.DataFrame:
+        """Efficiently reads files using existing methods, handling large datasets with chunking."""
+
+        # ✅ Handle UploadedFile or BytesIO (for Streamlit uploaded files)
+        if isinstance(file, BytesIO) or hasattr(file, "read"):
+            file.seek(0)  # ✅ Reset pointer for reading
+            file_bytes = file.read()  # ✅ Read bytes properly
+
+            if file_type == "Excel":
+                return self.read_excel_file(BytesIO(file_bytes), chunk_size)
+
+            # ✅ Handle DD files in chunks
+            elif file_type == "DD":
+                return pd.concat(self.read_dd_file(BytesIO(file_bytes), chunk_size), ignore_index=True)
+
+            # ✅ Handle Text/Log files in chunks
+            elif file_type in ["TEXT", "CSV", "JSON", "LOG"]:
+                return self.read_logs_file(file, file_type, chunk_size)
+            else:
+                raise ValueError(f"Unsupported file type: {file_type}")
+
+        # ✅ Handle File Paths (str or Path)
+        elif isinstance(file, (str, Path)):
+            file_path = Path(file)
+            if file_type == "Excel" and file_path.suffix.lower() in [".xlsx", ".xls"]:
+                return self.read_excel_file(file_path, chunk_size)
+            elif file_type == "DD":
+                return pd.concat(self.read_dd_file(file_path, chunk_size), ignore_index=True)
+            elif file_type in ["TEXT", "CSV", "JSON", "LOG"]:
+                return self.read_logs_file(file_path, file_type, chunk_size)
+            else:
+                raise ValueError(f"Unsupported file type: {file_path.suffix}")
+        else:
+            raise TypeError(f"Invalid file type received: {type(file)}")
+
 
     def compare_files(self, df_baseline=None, df_candidate=None, file_type="Excel", filters=None):
         """Compare Baseline and Candidate files using dynamically defined rules from rules_config.json."""
         if filters is None:
             filters = {}
+        
+        if df_baseline is not None and df_candidate is not None:
+            df_baseline, df_candidate = df_baseline.copy(), df_candidate.copy()
+        else:
+            input_file_baseline, input_file_candidate, _ = self.resolve_file_paths()
 
-        input_file_baseline, input_file_candidate, _ = self.resolve_file_paths()
-        df_baseline = self.read_dd_file(input_file_baseline)
-        df_candidate = self.read_dd_file(input_file_candidate)
+            # ✅ Call `read_file()` to support all formats
+            df_baseline = self.read_file(input_file_baseline if isinstance(input_file_baseline, (BytesIO)) else Path(input_file_baseline), file_type)
+            df_candidate = self.read_file(input_file_candidate if isinstance(input_file_candidate, (BytesIO)) else Path(input_file_candidate), file_type)
+
 
         print("Baseline Data (Before Cleaning):\n", df_baseline.head())
         print("Candidate Data (Before Cleaning):\n", df_candidate.head())
