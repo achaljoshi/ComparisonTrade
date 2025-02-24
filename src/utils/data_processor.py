@@ -82,7 +82,7 @@ class DataProcessor:
 
         return input_file_baseline, input_file_candidate, output_file_result
 
-    def read_dd_file(self, file: Union[str, BytesIO], chunk_size=100000) -> Generator[pd.DataFrame, None, None]:
+    def read_dd_file(self, file: Union[str, BytesIO], chunk_size=500) -> Generator[pd.DataFrame, None, None]:
         """Reads a structured DD file, handling nested objects & arrays dynamically while processing large files in chunks."""
 
         records = []
@@ -193,7 +193,7 @@ class DataProcessor:
 
         return array_data
 
-    def read_logs_file(self, file: Union[str, Path, BytesIO], file_type: str, chunk_size=100000) -> pd.DataFrame:
+    def read_logs_file(self, file: Union[str, Path, BytesIO], file_type: str, chunk_size=500) -> pd.DataFrame:
         """Reads various log-based files (.log, .csv, .txt, .json) with chunking support."""
 
         # ✅ Handle Streamlit `BytesIO` uploaded files
@@ -229,7 +229,7 @@ class DataProcessor:
         else:
             raise ValueError(f"Unsupported file format: {file_suffix}")
     
-    def read_excel_file(self, file, chunk_size=100000) -> pd.DataFrame:
+    def read_excel_file(self, file, chunk_size=500) -> pd.DataFrame:
         """Reads an Excel file efficiently using chunks (if needed)."""
         df = pd.read_excel(file, engine="openpyxl")  # ✅ Read normally
         if len(df) > chunk_size:  # ✅ If file is too large, process in chunks
@@ -237,7 +237,7 @@ class DataProcessor:
             return pd.concat(chunks, ignore_index=True)
         return df
 
-    def read_file(self, file, file_type: str, chunk_size=100000) -> pd.DataFrame:
+    def read_file(self, file, file_type: str, chunk_size=500) -> pd.DataFrame:
         """Efficiently reads files using existing methods, handling large datasets with chunking."""
 
         # ✅ Handle UploadedFile or BytesIO (for Streamlit uploaded files)

@@ -175,79 +175,23 @@
             ]
         }
     ],
-    "matchId.matchGroupId": [
+    "matchId": [
         {
             "type": "Numerical check",
             "Rule Number": "1",
             "columns": [
                 "matchId"
+            ],
+            "format_type":"Object",
+            "sub_columns": [
+                "matchGroupId",
+                "notUsed",
+                "combinationMatchId"
             ],
             "description": "The matchGroupId must be a monotonically increasing number per partition, assigned to an execution event.",
             "constraints": {
                 "min": 0
-            },
-            "format": "Long"
-        },
-        {
-            "type": "Presence check",
-            "Rule Number": "2",
-            "columns": [
-                "matchId"
-            ],
-            "description": "The matchGroupId must be present if the preceding boolean is set to true.",
-            "relations": [
-                "preceding boolean"
-            ]
-        }
-    ],
-    "matchId.notUsed": [
-        {
-            "type": "String check",
-            "Rule Number": "1",
-            "columns": [
-                "matchId"
-            ],
-            "description": "The matchId must be a non-empty string.",
-            "constraints": {
-                "min": 1
-            },
-            "format": "string"
-        },
-        {
-            "type": "String check",
-            "Rule Number": "2",
-            "columns": [
-                "matchId"
-            ],
-            "description": "The matchId should be unique within the context of a transaction.",
-            "relations": [
-                "transactionId"
-            ]
-        }
-    ],
-    "matchId.combinationMatchId": [
-        {
-            "type": "Numerical check",
-            "Rule Number": "1",
-            "columns": [
-                "matchId"
-            ],
-            "description": "The combinationMatchId must be a sequential number of an execution sequence number.",
-            "constraints": {
-                "min": 0
-            },
-            "format": "Integer"
-        },
-        {
-            "type": "Presence check",
-            "Rule Number": "2",
-            "columns": [
-                "matchId"
-            ],
-            "description": "The combinationMatchId field must be present if the preceding boolean is set to true.",
-            "relations": [
-                "preceding boolean"
-            ]
+            }
         }
     ],
     "orderPrice": [

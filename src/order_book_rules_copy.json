@@ -38,19 +38,9 @@
                 "type": "Numerical check",
                 "Rule Number": "1",
                 "columns": [
-                    "tickSizes"
+                    "tickSizes[0]"
                 ],
                 "description": "Tick sizes must be a positive integer value.",
-                "format_type":"Array",
-                "constraints": {
-                    "min": 1,
-                    "max":9999
-                },
-                "sub_columns": [
-                    "lowerLimit",
-                    "upperLimit",
-                    "tickSize"
-                ],
                 "valid_values": [],
                 "default_value": null,
                 "tolerance": null,

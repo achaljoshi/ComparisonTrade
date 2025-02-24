@@ -49,7 +49,7 @@ $env:RULES_CONFIG_PATH="C:\path\to\rules_config.json"
 
 ----- Relative paths work fine ----
 
-python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" --rules_config "src/rules_config1.json" --output "output/output.csv" --file_type "Excel" --format "csv"
+python src/cli.py --baseline "src/data/asx_1.xlsx" --candidate "src/data/asx_2.xlsx" --directory_config "src/config/directory_config.json" --job_response "src/job_creation_response.json" --rules_config "src/config/rules_config1.json" --output "output/output.xlsx" --file_type "Excel" --format "excel"
 
 python src/cli.py --baseline "asx_1.xlsx" --candidate "asx_2.xlsx" --directory_config "src/directory_config.json" --job_response "src/job_creation_response.json" --rules_config "src/rules_config1.json" --output "output/output.json" --file_type "Excel" --format "json"
 

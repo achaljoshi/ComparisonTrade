@@ -25,6 +25,19 @@ if os.path.exists(cache_dir):
 
 # **✅ Ensure `st.set_page_config()` is first**
 st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
+st.markdown(
+        """
+        <style>
+        [data-testid="stSidebarNav"] {
+            background-image: url(https://www.mabl.com/hs-fs/hubfs/logo-coforge.png?width=900&name=logo-coforge.png);
+            background-repeat: no-repeat;
+            padding-top: 120px;
+            background-position: 20px 20px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ✅ Clear Cache & Restart Button
 if st.sidebar.button("🔄 Clear Cache & Restart", key="restart_button"):
@@ -478,3 +491,19 @@ if not filtered_results.empty:
     st.header("Discrepancy Details")
     st.dataframe(filtered_results)
 
+def add_logo():
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebarNav"] {
+            background-image: url(https://www.mabl.com/hs-fs/hubfs/logo-coforge.png?width=900&name=logo-coforge.png);
+            background-repeat: no-repeat;
+            padding-top: 120px;
+            background-position: 20px 20px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+add_logo()
