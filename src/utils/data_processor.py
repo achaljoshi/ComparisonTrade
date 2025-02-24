@@ -31,21 +31,29 @@ class DataProcessor:
             self.rules_config = rules_config  # Assume it's already a dictionary
 
     def run_comparison(self, baseline_file, candidate_file, file_type="Excel", filters=None):
-        """Run the discrepancy check process."""
-        if isinstance(baseline_file, BytesIO):
-            df_baseline = pd.read_excel(baseline_file, engine="openpyxl") if file_type == "Excel" else pd.read_csv(
-                baseline_file)
-        else:
-            df_baseline = pd.read_excel(baseline_file, engine="openpyxl") if file_type == "Excel" else pd.read_csv(
-                baseline_file)
+        """Run the discrepancy check process with support for TXT, CSV, and Excel formats."""
 
-        if isinstance(candidate_file, BytesIO):
-            df_candidate = pd.read_excel(candidate_file, engine="openpyxl") if file_type == "Excel" else pd.read_csv(
-                candidate_file)
-        else:
-            df_candidate = pd.read_excel(candidate_file, engine="openpyxl") if file_type == "Excel" else pd.read_csv(
-                candidate_file)
+        # Ensure `file_type` is always lowercase for consistency
+        file_type = file_type.lower()
 
+        # Read baseline and candidate files based on type
+        if file_type == "excel":
+            df_baseline = pd.read_excel(baseline_file, engine="openpyxl")
+            df_candidate = pd.read_excel(candidate_file, engine="openpyxl")
+
+        elif file_type == "csv":
+            df_baseline = pd.read_csv(baseline_file)
+            df_candidate = pd.read_csv(candidate_file)
+
+        elif file_type == "txt":
+            # 🔹 Instead of `pd.read_csv()`, use `read_dd_file()`
+            df_baseline = pd.concat(self.read_dd_file(baseline_file), ignore_index=True)
+            df_candidate = pd.concat(self.read_dd_file(candidate_file), ignore_index=True)
+
+        else:
+            raise ValueError(f"Unsupported file type: {file_type}")
+
+        # Run comparison
         results = self.compare_files(df_baseline, df_candidate, file_type, filters)
         return results
 
