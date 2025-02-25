@@ -10,6 +10,8 @@ import shutil
 import tempfile
 from pathlib import Path
 import logging
+import hashlib
+import uuid
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -250,10 +252,25 @@ else:
 st.sidebar.header("🔍 Filter Rules")
 selected_filters = st.session_state.get("selected_filters", {})
 
+def generate_unique_key(column_name, rule_number, rule_type, rule_id, index):
+    """Generate a fully unique key using hashing, UUID, and indexing."""
+    hash_string = f"{column_name}_{rule_number}_{rule_type}_{rule_id}_{index}_{uuid.uuid4().hex}"
+    return hashlib.md5(hash_string.encode()).hexdigest()[:8] + f"_{rule_id}_{index}"
+
+def convert_to_numeric(value):
+    """Converts a string value to int or float if possible, otherwise returns None."""
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str) and value.replace(".", "").isdigit():
+        return float(value) if "." in value else int(value)
+    return None  # If conversion fails, return None
 
 def get_rules_sidebar():
+    """Generates a Streamlit sidebar with dynamically populated rule filters."""
+    selected_filters = st.session_state.get("selected_filters", {})
+
     for column_name, rules in rules_config.get("rules", {}).items():
-        for rule in rules:
+        for index, rule in enumerate(rules):  # Add index to ensure uniqueness
             if not isinstance(rule, dict):
                 continue  # Skip invalid rules
 
@@ -265,53 +282,163 @@ def get_rules_sidebar():
             st.sidebar.write(f"📝 Columns: {rule_columns}")
             st.sidebar.write(f"📄 Description: {rule.get('description', 'No description available')}")
 
-            # Ensure dictionary structure exists
-            selected_filters.setdefault(column_name, {}).setdefault(rule_number, {})
+            # Ensure dictionary structure exists in session state
+            if column_name not in selected_filters:
+                selected_filters[column_name] = {}
+            if rule_number not in selected_filters[column_name]:
+                selected_filters[column_name][rule_number] = {}
 
-            # ✅ Unique keys by including `column_name` + `rule_number`
-            unique_key_prefix = f"{column_name}_{rule_number}"
+            # Generate a unique key for each rule element
+            rule_id = f"{column_name}_{rule_number}"
+            unique_key = generate_unique_key(column_name, rule_number, rule_type, rule_id, index)
 
-            # Handle constraints and valid values
-            if "constraints" in rule:
-                for constraint_key, constraint_value in rule["constraints"].items():
-                    prev_value = selected_filters[column_name][rule_number].get(constraint_key, constraint_value)
-                    new_value = st.sidebar.number_input(
-                        f"{constraint_key} for {rule_number}",
-                        value=prev_value,
-                        key=f"{unique_key_prefix}_{constraint_key}"  # ✅ Unique key
-                    )
-                    selected_filters[column_name][rule_number][constraint_key] = new_value
+            # Handle constraints (min/max values)
+            min_value = convert_to_numeric(rule.get("constraints", {}).get("min", None))
+            max_value = convert_to_numeric(rule.get("constraints", {}).get("max", None))
 
-            # Handle valid values (dropdown if applicable)
+            # Handle valid values (dropdown)
             valid_values = rule.get("valid_values", [])
+            prev_value = selected_filters[column_name][rule_number].get("valid_value", valid_values[0] if valid_values else None)
 
-            # Set default to first value in the list if available, otherwise default to None
-            prev_value = selected_filters[column_name][rule_number].get("valid_value",
-                                                                        valid_values[0] if valid_values else None)
-
-            # Ensure Streamlit doesn't break when valid_values is empty
             if valid_values:
                 new_value = st.sidebar.selectbox(
-                    f"Valid Values for {rule_number}",
+                    f"Valid Values for {rule_number} ({rule_type})",
                     valid_values,
                     index=valid_values.index(prev_value) if prev_value in valid_values else 0,
-                    key=f"{column_name}_{rule_number}_valid_value"  # Unique key
+                    key=f"{unique_key}_valid_value"
                 )
                 selected_filters[column_name][rule_number]["valid_value"] = new_value
             else:
-                st.sidebar.warning(f"No valid values available for rule {rule_number}. Skipping selection.")
+                # If no valid values, fallback to default/numeric input
+                default_value = convert_to_numeric(rule.get("default_value", min_value if min_value is not None else 0))
 
-            # Handle sub_columns (Nested objects)
-            if "sub_columns" in rule:
-                for sub_column in rule["sub_columns"]:
-                    st.sidebar.markdown(f"🔹 **Sub-column: {sub_column}**")
-                    prev_value = selected_filters[column_name][rule_number].get(sub_column, "")
-                    new_value = st.sidebar.text_input(
-                        f"Enter value for {sub_column} in {rule_number}",
-                        value=prev_value,
-                        key=f"{unique_key_prefix}_{sub_column}"  # ✅ Unique key
-                    )
-                    selected_filters[column_name][rule_number][sub_column] = new_value
+                # Ensure default_value is at least min_value
+                if min_value is not None and default_value is not None and default_value < min_value:
+                    default_value = min_value
+
+                prev_value = selected_filters[column_name][rule_number].get("numerical_value", default_value)
+
+                new_value = st.sidebar.number_input(
+                    f"Enter value for {rule_number} ({rule_type})",
+                    value=prev_value,
+                    min_value=min_value,
+                    max_value=max_value,
+                    key=f"{unique_key}_numerical_value"
+                )
+                selected_filters[column_name][rule_number]["numerical_value"] = new_value
+
+            # Handle relations (dependencies) - FIXED
+            if "relations" in rule:
+                required_fields = ", ".join(
+                    [str(rel) if isinstance(rel, str) else str(rel.get("required_fields", "")) for rel in rule["relations"]]
+                )
+                st.sidebar.warning(f"⚠️ This rule depends on: {required_fields}")
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
+
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+st.write("### Selected Filters Debug Info:")
+st.json(st.session_state["selected_filters"])
 
 
 get_rules_sidebar()
