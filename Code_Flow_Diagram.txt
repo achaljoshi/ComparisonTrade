@@ -1,0 +1,98 @@
+Dataprocessor Class flow
+graph TD
+    subgraph "DataProcessor Class"
+        direction LR
+        A["__init__"] --> B(Load Configurations)
+        B --> C{File Paths or Dictionaries?}
+        C -- File Paths --> D[Load from JSON Files]
+        C -- Dictionaries --> E[Use Provided Dictionaries]
+        D --> F[Store Configurations]
+        E --> F
+        F --> G["run_comparison"]
+        G --> H[Read Baseline File]
+        G --> I[Read Candidate File]
+        H --> J{File Type?}
+        I --> J
+        J -- Excel --> K[read_excel_file]
+        J -- CSV --> L[read_csv]
+        J -- DD --> M[read_dd_file]
+        J -- Other --> N[read_logs_file]
+        K --> O[DataFrame Baseline]
+        L --> O
+        M --> O
+        N --> O
+        K --> P[DataFrame Candidate]
+        L --> P
+        M --> P
+        N --> P
+        O --> Q["compare_files"]
+        P --> Q
+        Q --> R[Discrepancy Results]
+        R --> S["save_results"]
+        S --> T{Format?}
+        T -- CSV --> U[Save as CSV]
+        T -- JSON --> V[Save as JSON]
+        T -- Excel --> W[Save as Excel]
+        U --> X[End]
+        V --> X
+        W --> X
+
+        M --> M1["read_dd_file Array Parsing"]
+        M1 --> M2{Array Field?}
+        M2 -- Yes --> M3[Extract Array Data]
+        M2 -- No --> M4[Continue Parsing]
+        M3 --> M5[Store as Key-Value Pairs]
+        M5 --> M4
+
+        R -- Acceptable --> R2["if diff <= Min"]
+        R -- Warning --> R3["if Min > diff < Max"]
+        R -- Fatal --> R4["if diff >= Max"]
+        R -- Info --> R5["Missing rows from both baseline and candidate"]
+        
+        R2 --> S
+        R3 --> S
+        R4 --> S
+        R5 --> S
+    end
+
+
+
+graph TD
+    A[Start: Input File] --> B{File Type?}
+    
+    B -->|DD File| C[Initialize read_dd_file method]
+    B -->|Other Files| D[Use appropriate read method]
+    
+    C --> E[Start Line-by-Line Parsing]
+    
+    E --> F{Line Content?}
+    
+    F -->|"#123; Start of Record"| G[Initialize New Record]
+    F -->|"#125; End of Record"| H[Store Completed Record]
+    F -->|Key-Value Pair| I{Parsing Type}
+    
+    I -->|Nested Object| J[Parse Nested Object]
+    I -->|Array| K[Parse Array]
+    I -->|Simple Value| L[Direct Assignment]
+    
+    K --> M{Is Array Field?}
+    M -->|Yes| N[Extract Array Data]
+    N --> O[Store as Key-Value Pairs]
+    O --> E
+    
+    G --> E
+    H --> P{Chunk Size Reached?}
+    
+    P -->|Yes| Q[Yield DataFrame Chunk]
+    P -->|No| E
+    
+    Q --> R[Reset Records]
+    R --> E
+    
+    L --> E
+    J --> E
+    
+    D --> S[Process File Using Specific Method]
+    S --> T[Return DataFrame]
+    
+    T --> U[End: Processed Data]
