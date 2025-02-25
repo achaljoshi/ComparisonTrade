@@ -340,8 +340,8 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 get_rules_sidebar()
 
@@ -349,8 +349,8 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 get_rules_sidebar()
 
@@ -358,18 +358,8 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 
 get_rules_sidebar()
@@ -378,8 +368,8 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 
 get_rules_sidebar()
@@ -388,8 +378,8 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 
 get_rules_sidebar()
@@ -398,8 +388,8 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 
 get_rules_sidebar()
@@ -408,8 +398,8 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 
 get_rules_sidebar()
@@ -418,17 +408,8 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 
 get_rules_sidebar()
@@ -437,8 +418,27 @@ get_rules_sidebar()
 st.session_state["selected_filters"] = selected_filters
 
 # Debugging Output
-st.write("### Selected Filters Debug Info:")
-st.json(st.session_state["selected_filters"])
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
+
+
+get_rules_sidebar()
+
+# Store selected filters in session state
+st.session_state["selected_filters"] = selected_filters
+
+# Debugging Output
+#st.write("### Selected Filters Debug Info:")
+#st.json(st.session_state["selected_filters"])
 
 
 get_rules_sidebar()
