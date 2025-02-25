@@ -1,11 +1,14 @@
 import sys
 import os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import tempfile
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 import pandas as pd
-from src.utils.data_processor import DataProcessor  # ✅ Ensure DataProcessor is correctly imported
+from src.utils.data_processor import (
+    DataProcessor,
+)
 
 # ✅ Ensure output directory exists
 OUTPUT_DIR = "output"
@@ -21,6 +24,7 @@ MIME_TYPES = {
 
 app = FastAPI()
 
+
 @app.post("/compare/")
 async def compare_files(
     baseline_file: UploadFile = File(...),
@@ -29,23 +33,29 @@ async def compare_files(
     job_response: UploadFile = File(...),
     rules_config: UploadFile = File(...),
     file_type: str = Form(...),
-    output_format: str = Form("json")  # Supports: json, csv, xlsx, txt
+    output_format: str = Form("json"),  # Supports: json, csv, xlsx, txt
 ):
     temp_files = []  # ✅ Store temp file paths for safe deletion
 
     try:
         # ✅ Save uploaded files to temporary files
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt" if file_type == "txt" else ".xlsx") as temp_baseline:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".txt" if file_type == "txt" else ".xlsx"
+        ) as temp_baseline:
             temp_baseline.write(await baseline_file.read())
             baseline_path = temp_baseline.name
             temp_files.append(baseline_path)
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt" if file_type == "txt" else ".xlsx") as temp_candidate:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".txt" if file_type == "txt" else ".xlsx"
+        ) as temp_candidate:
             temp_candidate.write(await candidate_file.read())
             candidate_path = temp_candidate.name
             temp_files.append(candidate_path)
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_directory:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".json"
+        ) as temp_directory:
             temp_directory.write(await directory_config.read())
             directory_path = temp_directory.name
             temp_files.append(directory_path)
@@ -76,10 +86,15 @@ async def compare_files(
         elif file_type == "txt":
             # ✅ Use `read_dd_file()` instead of `pd.read_csv()`
             df_baseline = pd.concat(tool.read_dd_file(baseline_path), ignore_index=True)
-            df_candidate = pd.concat(tool.read_dd_file(candidate_path), ignore_index=True)
+            df_candidate = pd.concat(
+                tool.read_dd_file(candidate_path), ignore_index=True
+            )
 
         else:
-            raise HTTPException(status_code=400, detail="Unsupported file type. Use 'Excel', 'CSV', or 'TXT'.")
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type. Use 'Excel', 'CSV', or 'TXT'.",
+            )
 
         # ✅ Run Comparison
         results = tool.compare_files(df_baseline, df_candidate, file_type)
@@ -95,16 +110,21 @@ async def compare_files(
         elif file_extension == "json":
             results.to_json(output_filepath, orient="records", indent=2)
 
-        elif file_extension in ["xlsx", "excel"]:
+        elif file_extension in {"xlsx", "excel"}:
             results.to_excel(output_filepath, index=False, engine="openpyxl")
 
-        elif file_extension in ["txt", "text"]:
-            results_text = results.to_csv(sep="\t", index=False)  # ✅ FIX: Use tab-separated format for better structure
+        elif file_extension in {"txt", "text"}:
+            results_text = results.to_csv(
+                sep="\t", index=False
+            )  # ✅ FIX: Use tab-separated format for better structure
             with open(output_filepath, "w", encoding="utf-8") as f:
                 f.write(results_text)
 
         else:
-            raise HTTPException(status_code=400, detail="Unsupported output format. Use json, csv, xlsx, or txt.")
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported output format. Use json, csv, xlsx, or txt.",
+            )
 
         # ✅ Cleanup Temporary Files (except output)
         for file_path in temp_files:
@@ -119,7 +139,7 @@ async def compare_files(
                 content={
                     "message": "Comparison completed successfully.",
                     "output_format": "json",
-                    "data": results.to_dict(orient="records")
+                    "data": results.to_dict(orient="records"),
                 }
             )
 
@@ -128,12 +148,14 @@ async def compare_files(
             content={
                 "message": "Comparison completed successfully.",
                 "output_format": file_extension,
-                "download_url": f"/download/{output_filename}"
+                "download_url": f"/download/{output_filename}",
             }
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing files: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing files: {str(e)}"
+        ) from e
 
 
 @app.get("/download/{filename}")
@@ -149,8 +171,4 @@ async def download_output(filename: str):
     file_extension = filename.split(".")[-1]
     mime_type = MIME_TYPES.get(file_extension, "application/octet-stream")
 
-    return FileResponse(
-        path=filepath,
-        filename=filename,
-        media_type=mime_type
-    )
+    return FileResponse(path=filepath, filename=filename, media_type=mime_type)

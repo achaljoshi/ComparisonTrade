@@ -1,0 +1,390 @@
+# COMPARATOR TOOL PSEUDO-CODE
+
+CLASS DataProcessor:
+
+    # Initialize with configuration files or dictionaries
+    METHOD __init__(directory_config, job_response, rules_config):
+        LOAD directory, job, and rule configurations
+
+    # Resolve file paths dynamically
+    METHOD resolve_file_paths():
+        RETRIEVE baseline and candidate paths using job_response
+        RETURN formatted file paths
+
+    # Run the comparison process - FOR CLI and API
+    METHOD run_comparison(baseline_file, candidate_file, file_type, filters):
+        READ baseline and candidate files
+        CALL compare_files()
+        RETURN results
+
+    # Save comparison results - FOR CLI and API
+    METHOD save_results(results, output_path, format):
+        IF format is CSV, JSON, or Excel:
+            SAVE results in the respective format
+        PRINT confirmation message
+
+    # Read and process structured DD files
+    METHOD read_dd_file(file, chunk_size):
+        PARSE nested objects and arrays line-by-line
+        YIELD DataFrame chunks for efficiency
+        RETURN processed data
+
+    # Read various file formats (TXT, CSV, JSON, Excel, LOG, etc.)
+    METHOD read_file(file, file_type, chunk_size):
+        DETECT file type and CALL appropriate reading method
+        RETURN DataFrame
+
+    # Compare baseline and candidate data
+    METHOD compare_files(df_baseline, df_candidate, file_type, filters):
+        STANDARDIZE column names
+        IDENTIFY missing rows
+        APPLY validation rules
+        RETURN discrepancies
+
+    # Validate array differences
+    METHOD get_arrays_rules(df_merged, discrepancies, key_column, array_rule_key):
+        EXTRACT array values
+        CHECK min/max constraints
+        CLASSIFY discrepancies
+        STORE results
+
+    # Apply validation rules for all columns
+    METHOD extract_discrepancy(df_merged, discrepancies, filters, key_column):
+        ITERATE through validation rules
+        APPLY constraints (e.g., min/max, regex)
+        STORE mismatches
+
+    # Identify missing rows in baseline and candidate
+    METHOD missing_row_baseline(discrepancies, extra_rows_candidate, key_column):
+        RECORD missing rows in baseline
+
+    METHOD missing_row_candidate(discrepancies, extra_rows_baseline, key_column):
+        RECORD missing rows in candidate
+
+    # Generate final discrepancy report
+    METHOD final_discrepancy_list(df_merged, discrepancies, key_column, rule_number, rule_type, rule_description, col, col_baseline, col_candidate):
+        APPEND mismatched records to discrepancies list
+
+# END OF PSEUDO-CODE
+
+
+
+
+
+METHOD get_arrays_rules(df_merged, discrepancies, key_column, array_rule_key):
+    
+    # Extract array validation rules from rules_config
+    RETRIEVE array_rules FROM rules_config["rules"][array_rule_key]
+
+    # Identify sub-columns to validate within array
+    EXTRACT sub_columns FROM array_rules
+
+    # Iterate through array validation rules
+    FOR each rule IN array_rules:
+        IF rule contains "constraints":
+            SET min_arrays = rule["constraints"].get("min", min_arrays)
+            SET max_arrays = rule["constraints"].get("max", max_arrays)
+
+        IF rule contains "valid_values":
+            SET predefined_values = rule["valid_values"]
+
+    # Apply array validation to merged dataset
+    CALL get_arrays(df_merged, discrepancies, key_column, max_arrays, min_arrays, sub_columns, array_rule_key, array_rules)
+
+
+METHOD extract_discrepancy(df_merged, discrepancies, filters, key_column):
+    
+    # Loop through each column rule in rules_config
+    FOR each column_name IN rules_config["rules"]:
+        RETRIEVE rules_list FOR column_name FROM rules_config
+
+        FOR each rule IN rules_list:
+
+            # Extract rule attributes
+            SET rule_number = rule["rulenumber"]
+            SET rule_type = rule["type"]
+            SET rule_description = rule["description"]
+            SET rule_constraints = rule.get("constraints", {})
+
+            # Identify columns affected by the rule
+            FOR each col IN rule["columns"]:
+                SET col_baseline = col + "_baseline"
+                SET col_candidate = col + "_candidate"
+
+                # Ensure columns exist in dataset
+                IF col_baseline NOT IN df_merged OR col_candidate NOT IN df_merged:
+                    CONTINUE
+
+                # Compute differences
+                COMPUTE difference = ABS(df_merged[col_candidate] - df_merged[col_baseline]) -- ABS converts negative values to positive
+
+                # Apply rule constraints (min/max)
+                SET constraint_min = filters.get(rule_number, {}).get("constraints_min", rule_constraints.get("min", float("inf")))
+                SET constraint_max = filters.get(rule_number, {}).get("constraints_max", rule_constraints.get("max", float("inf")))
+
+                # Classify discrepancies based on constraints
+                IF difference <= constraint_min:
+                    SET category = rule.get("classification", {}).get("min")
+                ELSE IF difference >= constraint_max:
+                    SET category = rule.get("classification", {}).get("max")
+                ELSE IF difference > constraint_min AND difference < constraint_max:
+                    SET category = rule.get("classification", {}).get("min_max")
+                ELSE:
+                    SET category = rule.get("classification", {}).get("other")
+
+                # Store discrepancies
+                FOR each row IN df_merged WHERE "rule_violation" > 0:
+                    APPEND {
+                        "Key Column": row[key_column],
+                        "Column Name": col,
+                        "Rule Type": rule_type,
+                        "Category": category,
+                        "Rule Number": rule_number,
+                        "Description": rule_description,
+                        "Baseline Value": row[col_baseline],
+                        "Candidate Value": row[col_candidate]
+                    } TO discrepancies
+
+
+
+-------- For UI -----
+
+# COMPARATOR DASHBOARD PSEUDO-CODE
+
+# ✅ Import necessary modules
+IMPORT required libraries (streamlit, pandas, plotly, json, shutil, tempfile, logging, os, pathlib)
+CONFIGURE logging for debugging
+
+# ✅ Set up Streamlit app layout
+st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
+
+# ✅ Delete cache directory if exists
+IF cache directory exists:
+    DELETE cache folder
+
+# ✅ Sidebar: Clear Cache & Restart
+IF "Clear Cache & Restart" button is clicked:
+    CLEAR session state and cache
+    RELOAD page
+
+# ✅ Maintain session state variables
+INITIALIZE session state variables (config file paths, selected filters, results)
+
+# ✅ Required configuration files
+DEFINE required_files = {"directory_config.json", "job_creation_response.json", "rules_config.json"}
+
+# ✅ Step 1: Upload Configuration Files
+IF screen state is "upload_config":
+    DISPLAY file upload section
+    IDENTIFY missing config files
+    UPLOAD missing files
+    SAVE file paths to session state
+    IF all files uploaded:
+        UPDATE screen state to "file_type_selection"
+        REFRESH UI
+
+# ✅ Step 2: Select File Type
+IF screen state is "file_type_selection":
+    DISPLAY radio button for file type selection
+    MAP selected file type to internal format
+    UPDATE session state
+    IF "Next" button clicked:
+        UPDATE screen state to "file_selection"
+        REFRESH UI
+
+# ✅ Step 3: Upload Baseline & Candidate Files
+IF screen state is "file_selection":
+    DISPLAY file upload section for baseline and candidate files
+    IF "Run Comparison" button is clicked:
+        INITIALIZE DataProcessor with uploaded configuration files
+        DETECT file type based on extension
+        CONVERT uploaded files to BytesIO
+        READ files into DataFrames
+        CHECK for empty files and stop if found
+        RUN comparison using compare_files()
+        STORE results in session state
+        DISPLAY success message
+
+# ✅ Sidebar: Display Rules & Filters
+DEFINE get_rules_sidebar():
+    FOR each rule in rules_config:
+        DISPLAY rule information
+        ALLOW user to set constraints and valid values
+        UPDATE selected filters in session state
+
+CALL get_rules_sidebar()
+
+# ✅ Apply or Reset Filters
+IF "Apply Filter" button clicked:
+    RE-RUN comparison with selected filters
+    UPDATE session state
+    DISPLAY success message
+
+IF "Reset Filters" button clicked:
+    CLEAR selected filters
+    RESET filtered results
+    REFRESH UI
+
+# ✅ Export Discrepancy Report
+DEFINE get_file_name():
+    GENERATE filename based on job response data
+    EXPORT data in user-selected format (CSV, Excel, JSON, Text)
+    PROVIDE download button
+
+IF results are available:
+    CALL get_file_name()
+
+# ✅ Display Key Performance Metrics
+DEFINE get_key_performance():
+    DISPLAY total discrepancies and missing row counts
+    GENERATE dynamic bar chart for discrepancies by column
+    DISPLAY pie chart for discrepancy type distribution
+    SHOW filtered data table
+
+IF filtered results exist:
+    CALL get_key_performance()
+
+------------------------------------------
+
+
+-------- For CLI -----
+
+# CLI TOOL PSEUDO-CODE
+
+IMPORT argparse, os
+IMPORT DataProcessor from utils.data_processor
+
+# ✅ Convert relative paths to absolute paths
+METHOD get_absolute_path(path):
+    RETURN absolute path of given file
+
+# ✅ Main function for CLI tool
+METHOD main():
+    # Initialize argument parser
+    CREATE parser with description "Discrepancy Detection CLI Tool"
+
+    # Define required arguments
+    ADD argument "--baseline" (Path to baseline file, Required)
+    ADD argument "--candidate" (Path to candidate file, Required)
+    ADD argument "--directory_config" (Path to directory_config.json, Required)
+    ADD argument "--job_response" (Path to job_creation_response.json, Required)
+    ADD argument "--rules_config" (Path to rules_config.json, Required)
+
+    # Define optional arguments
+    ADD argument "--output" (Output file path, Default: "discrepancy_report.csv")
+    ADD argument "--file_type" (Choices: ["Excel", "CSV", "txt"], Default: "Excel")
+    ADD argument "--format" (Choices: ["csv", "json", "excel"], Default: "csv")
+
+    # Parse command-line arguments
+    args = PARSE command-line inputs
+
+    # Convert paths to absolute paths
+    SET baseline_path = get_absolute_path(args.baseline)
+    SET candidate_path = get_absolute_path(args.candidate)
+    SET directory_config_path = get_absolute_path(args.directory_config)
+    SET job_response_path = get_absolute_path(args.job_response)
+    SET rules_config_path = get_absolute_path(args.rules_config)
+    SET output_path = get_absolute_path(args.output)
+
+    # Initialize the data processing tool
+    INITIALIZE tool = DataProcessor(directory_config_path, job_response_path, rules_config_path)
+
+    # Run the comparison process
+    CALL tool.run_comparison(baseline_path, candidate_path, args.file_type) → results
+
+    # Save the results in the desired format
+    CALL tool.save_results(results, output_path, args.format)
+
+# ✅ Run main function when script is executed
+IF script is run directly:
+    CALL main()
+
+
+-------------------------------------------
+
+------------- For API -----
+
+# FASTAPI-BASED DISCREPANCY DETECTION API
+
+IMPORT necessary libraries (sys, os, tempfile, fastapi, pandas, json)
+ADD project directory to system path
+IMPORT DataProcessor from utils.data_processor
+
+# ✅ Ensure output directory exists
+SET OUTPUT_DIR = "output"
+CREATE output directory if it does not exist
+
+# ✅ Define MIME types for different file formats
+SET MIME_TYPES = {"csv": "text/csv", "json": "application/json", "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "txt": "text/plain"}
+
+# ✅ Initialize FastAPI app
+CREATE FastAPI application
+
+# ✅ API Endpoint: Compare Files
+@POST("/compare/")
+ASYNC FUNCTION compare_files(
+    baseline_file, candidate_file, directory_config, job_response, rules_config, file_type, output_format
+):
+    INITIALIZE temp_files list to track temporary files
+
+    TRY:
+        # ✅ Save uploaded files as temporary files
+        FOR each uploaded file:
+            CREATE temporary file with appropriate suffix
+            WRITE file content to temporary file
+            STORE file path in temp_files list
+
+        # ✅ Initialize DataProcessor with config files
+        INITIALIZE tool = DataProcessor(directory_path, job_path, rules_path)
+
+        # ✅ Read baseline and candidate files based on file_type
+        CONVERT file_type to lowercase
+        IF file_type is "excel":
+            READ baseline and candidate as Excel files
+        ELSE IF file_type is "csv":
+            READ baseline and candidate as CSV files
+        ELSE IF file_type is "txt":
+            CALL read_dd_file() to process structured text files
+        ELSE:
+            RAISE HTTPException for unsupported file type
+
+        # ✅ Run data comparison
+        CALL tool.compare_files(df_baseline, df_candidate, file_type) → results
+
+        # ✅ Save results in requested output format
+        SET output_filename = "comparison_output.<output_format>"
+        SET output_filepath = OUTPUT_DIR + output_filename
+        CONVERT results based on output_format:
+            IF "csv": SAVE as CSV
+            IF "json": SAVE as JSON
+            IF "xlsx": SAVE as Excel
+            IF "txt": SAVE as tab-separated text
+            ELSE: RAISE HTTPException for unsupported format
+
+        # ✅ Cleanup temporary files (except output file)
+        FOR each file_path in temp_files:
+            DELETE file_path safely
+
+        # ✅ Return JSON response for non-downloadable formats
+        IF output_format is "json":
+            RETURN JSONResponse with comparison results
+        ELSE:
+            RETURN JSONResponse with download URL
+
+    EXCEPT Exception as e:
+        RETURN HTTPException with error details
+
+# ✅ API Endpoint: Download Output File
+@GET("/download/{filename}")
+ASYNC FUNCTION download_output(filename):
+    SET filepath = OUTPUT_DIR + filename
+
+    # ✅ Ensure file exists before allowing download
+    IF file does not exist:
+        RETURN HTTPException(404, "File not found")
+
+    # ✅ Determine MIME type and return file response
+    SET mime_type = MIME_TYPES.get(file extension, "application/octet-stream")
+    RETURN FileResponse(filepath, filename, media_type=mime_type)
+
+-----------------------------------

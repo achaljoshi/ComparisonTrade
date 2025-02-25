@@ -172,71 +172,70 @@ if st.session_state["screen"] == "file_selection":
         "Upload Candidate File", type=["xlsx", "txt", "csv", "json", "log"], key="candidate_file"
     )
 
-    if st.button("Run Comparison", key="run_comparison_button"):
-        if uploaded_file_baseline and uploaded_file_candidate:
-            try:
-                # ✅ Initialize Data Processor
-                processor = DataProcessor(
-                    st.session_state["directory_config_path"],
-                    st.session_state["job_response_path"],
-                    st.session_state["rules_config_path"]
-                )
-
-                file_type = st.session_state["file_type"]
-
-                # ✅ Auto-detect file type based on extension
-                def detect_file_type(file):
-                    filename = file.name.lower()
-                    if filename.endswith(".xlsx") or filename.endswith(".xls") and file_type == "Excel":
-                        return "Excel"
-                    elif filename.endswith(".txt") and file_type == "DD":
-                        return "DD"
-                    elif filename.endswith(".txt") and file_type == "Text":
-                        return "TEXT"
-                    elif filename.endswith(".csv") and file_type == "Text":
-                        return "CSV"
-                    elif filename.endswith(".json") and file_type == "Text":
-                        return "JSON"
-                    elif filename.endswith(".log") and file_type == "Text":
-                        return "LOG"
-                    else:
-                        raise ValueError("Unsupported file format.")
-
-                file_type = detect_file_type(uploaded_file_baseline)
-                st.session_state["file_type"] = file_type  # ✅ Ensure file type is set in session
-
-                # ✅ Convert uploaded files to `BytesIO`
-                baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
-                candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
-
-                # ✅ Reset file pointer before reading (important for Streamlit uploads)
-                baseline_bytes.seek(0)
-                candidate_bytes.seek(0)
-
-                # ✅ Read files using `read_file()` from DataProcessor
-                df_baseline = processor.read_file(baseline_bytes, file_type)
-                df_candidate = processor.read_file(candidate_bytes, file_type)
-
-                # ✅ Debugging: Display sample data
-                st.write("✅ Uploaded files successfully converted to DataFrames.")
-                print("✅ Baseline DataFrame:\n", df_baseline.head())
-                print("✅ Candidate DataFrame:\n", df_candidate.head())
-
-                # ✅ Ensure files are not empty
-                if df_baseline.empty or df_candidate.empty:
-                    st.error("One of the uploaded files is empty. Please check your data.")
-                    st.stop()
-
-                # ✅ Run Comparison
-                results = processor.compare_files(df_baseline, df_candidate, file_type)
-                st.success("✅ Comparison Completed! Discrepancy report generated.")
-
-                # ✅ Store results in session state
-                st.session_state["results"] = results
-                st.session_state["filtered_results"] = results
-
-            except Exception as e:
-                st.error(f"Error processing files: {str(e)}")
+    if st.button("Run Comparison", key="run_comparison_button") and (uploaded_file_baseline and uploaded_file_candidate):
+        try:
+            # ✅ Initialize Data Processor
+            processor = DataProcessor(
+                st.session_state["directory_config_path"],
+                st.session_state["job_response_path"],
+                st.session_state["rules_config_path"]
+            )
+    
+            file_type = st.session_state["file_type"]
+    
+            # ✅ Auto-detect file type based on extension
+            def detect_file_type(file):
+                filename = file.name.lower()
+                if filename.endswith(".xlsx") or filename.endswith(".xls") and file_type == "Excel":
+                    return "Excel"
+                elif filename.endswith(".txt") and file_type == "DD":
+                    return "DD"
+                elif filename.endswith(".txt") and file_type == "Text":
+                    return "TEXT"
+                elif filename.endswith(".csv") and file_type == "Text":
+                    return "CSV"
+                elif filename.endswith(".json") and file_type == "Text":
+                    return "JSON"
+                elif filename.endswith(".log") and file_type == "Text":
+                    return "LOG"
+                else:
+                    raise ValueError("Unsupported file format.")
+    
+            file_type = detect_file_type(uploaded_file_baseline)
+            st.session_state["file_type"] = file_type  # ✅ Ensure file type is set in session
+    
+            # ✅ Convert uploaded files to `BytesIO`
+            baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
+            candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
+    
+            # ✅ Reset file pointer before reading (important for Streamlit uploads)
+            baseline_bytes.seek(0)
+            candidate_bytes.seek(0)
+    
+            # ✅ Read files using `read_file()` from DataProcessor
+            df_baseline = processor.read_file(baseline_bytes, file_type)
+            df_candidate = processor.read_file(candidate_bytes, file_type)
+    
+            # ✅ Debugging: Display sample data
+            st.write("✅ Uploaded files successfully converted to DataFrames.")
+            print("✅ Baseline DataFrame:\n", df_baseline.head())
+            print("✅ Candidate DataFrame:\n", df_candidate.head())
+    
+            # ✅ Ensure files are not empty
+            if df_baseline.empty or df_candidate.empty:
+                st.error("One of the uploaded files is empty. Please check your data.")
+                st.stop()
+    
+            # ✅ Run Comparison
+            results = processor.compare_files(df_baseline, df_candidate, file_type)
+            st.success("✅ Comparison Completed! Discrepancy report generated.")
+    
+            # ✅ Store results in session state
+            st.session_state["results"] = results
+            st.session_state["filtered_results"] = results
+    
+        except Exception as e:
+            st.error(f"Error processing files: {str(e)}")
 
 # ✅ Load `rules_config.json`
 rules_config_path = st.session_state.get("rules_config_path")
@@ -323,10 +322,9 @@ st.session_state["selected_filters"] = selected_filters
 
 # ✅ Buttons
 apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
-reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
-
-# ✅ Reset Filters
-if reset_filter_clicked:
+if reset_filter_clicked := st.sidebar.button(
+    "♻️ Reset Filters", key="reset_filter_button"
+):
     st.session_state["selected_filters"] = {}
     st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
     st.rerun()
@@ -495,21 +493,3 @@ def get_key_performance():
 
 if not filtered_results.empty:
     get_key_performance()
-
-
-def add_logo():
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebarNav"] {
-            background-image: url(https://www.mabl.com/hs-fs/hubfs/logo-coforge.png?width=900&name=logo-coforge.png);
-            background-repeat: no-repeat;
-            padding-top: 120px;
-            background-position: 20px 20px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-add_logo()
