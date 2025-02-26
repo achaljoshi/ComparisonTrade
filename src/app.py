@@ -149,7 +149,7 @@ if st.session_state["screen"] == "upload_config":
         st.session_state["rules_config_path"] = uploaded_files.get("rules_config.json", st.session_state.get("rules_config_path"))
 
         st.success("✅ Configuration files uploaded successfully! Click 'Next' to proceed.")
-        
+
         if st.button("Next"):
             st.session_state["screen"] = "file_type_selection"
             st.rerun()  # ✅ Refresh UI to move to the next step
@@ -162,7 +162,7 @@ def cleanup_temp_files():
         for file_path in uploaded_files.values():
             if os.path.exists(file_path):
                 os.remove(file_path)  # ✅ Delete individual temp files
-        
+
         shutil.rmtree(temp_dir)  # ✅ Remove the entire temp directory
         st.success("Temporary files cleaned up successfully!")
 
@@ -213,9 +213,9 @@ if st.session_state["screen"] == "file_selection":
                 st.session_state["job_response_path"],
                 st.session_state["rules_config_path"]
             )
-    
+
             file_type = st.session_state["file_type"]
-    
+
             # ✅ Auto-detect file type based on extension
             def detect_file_type(file):
                 filename = file.name.lower()
@@ -233,40 +233,40 @@ if st.session_state["screen"] == "file_selection":
                     return "LOG"
                 else:
                     raise ValueError("Unsupported file format.")
-    
+
             file_type = detect_file_type(uploaded_file_baseline)
             st.session_state["file_type"] = file_type  # ✅ Ensure file type is set in session
-    
+
             # ✅ Convert uploaded files to `BytesIO`
             baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
             candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
-    
+
             # ✅ Reset file pointer before reading (important for Streamlit uploads)
             baseline_bytes.seek(0)
             candidate_bytes.seek(0)
-    
+
             # ✅ Read files using `read_file()` from DataProcessor
             df_baseline = processor.read_file(baseline_bytes, file_type)
             df_candidate = processor.read_file(candidate_bytes, file_type)
-    
+
             # ✅ Debugging: Display sample data
             st.write("✅ Uploaded files successfully converted to DataFrames.")
             print("✅ Baseline DataFrame:\n", df_baseline.head())
             print("✅ Candidate DataFrame:\n", df_candidate.head())
-    
+
             # ✅ Ensure files are not empty
             if df_baseline.empty or df_candidate.empty:
                 st.error("One of the uploaded files is empty. Please check your data.")
                 st.stop()
-    
+
             # ✅ Run Comparison
             results = processor.compare_files(df_baseline, df_candidate, file_type)
             st.success("✅ Comparison Completed! Discrepancy report generated.")
-    
+
             # ✅ Store results in session state
             st.session_state["results"] = results
             st.session_state["filtered_results"] = results
-    
+
         except Exception as e:
             st.error(f"Error processing files: {str(e)}")
 
@@ -301,81 +301,61 @@ def get_rules_sidebar():
     selected_filters = st.session_state.get("selected_filters", {})
 
     for column_name, rules in rules_config.get("rules", {}).items():
-        for index, rule in enumerate(rules):
-            if not isinstance(rule, dict):
-                continue
-
-            rule_number = rule.get("Rule Number", "Unknown Rule")
-            rule_type = rule.get("type", "Unknown Type")
-
-            st.sidebar.subheader(f"{column_name} - {rule_type}")
-
-            if column_name not in selected_filters:
-                selected_filters[column_name] = {}
-            if rule_number not in selected_filters[column_name]:
-                selected_filters[column_name][rule_number] = {}
-
-            # Only apply constraints
-            min_value = rule.get("constraints", {}).get("min", None)
-            max_value = rule.get("constraints", {}).get("max", None)
-            default_value = min_value if min_value is not None else 0
-
-            new_value = st.sidebar.number_input(
-                f"{column_name} - {rule_type}",
-                value=selected_filters[column_name][rule_number].get("numerical_value", default_value),
-                min_value=min_value,
-                max_value=max_value,
-                key=f"{column_name}_{rule_number}_value",
-                on_change=lambda: apply_filter()  # ✅ Trigger filter function
-            )
-
-            selected_filters[column_name][rule_number]["numerical_value"] = new_value
-
-    st.session_state["selected_filters"] = selected_filters
-
-def get_rules_sidebar():
-    """Generates a Streamlit sidebar with dynamically populated rule filters for constraints."""
-    selected_filters = st.session_state.get("selected_filters", {})
-
-    for column_name, rules in rules_config.get("rules", {}).items():
         for index, rule in enumerate(rules):  # Iterate with index to ensure uniqueness
             if not isinstance(rule, dict):
                 continue
 
             rule_number = rule.get("Rule Number", "Unknown Rule")
             rule_type = rule.get("type", "Unknown Type")
+            category = rule.get("category", "General")
 
-            st.sidebar.subheader(f"{column_name} - {rule_type}")
+            st.sidebar.subheader(f"{column_name} - {category} ({rule_type})")
 
-            # Ensure structure exists in session state
+            # Ensure session state structure exists
             if column_name not in selected_filters:
                 selected_filters[column_name] = {}
             if rule_number not in selected_filters[column_name]:
                 selected_filters[column_name][rule_number] = {}
 
-            # Only process constraints
-            min_value = rule.get("constraints", {}).get("min", None)
-            max_value = rule.get("constraints", {}).get("max", None)
-            default_value = min_value if min_value is not None else 0
+            # ✅ Extract min/max constraints
+            min_constraint = rule.get("constraints", {}).get("min", None)
+            max_constraint = rule.get("constraints", {}).get("max", None)
 
-            # ✅ Ensure the key is **always unique**
-            unique_key = f"{column_name}_{rule_number}_{index}_value"
+            # ✅ Get stored values or use constraints as defaults
+            default_min = selected_filters[column_name][rule_number].get("min", min_constraint or 0)
+            default_max = selected_filters[column_name][rule_number].get("max", max_constraint or 100)
 
-            new_value = st.sidebar.number_input(
-                f"{column_name} - {rule_type}",
-                value=selected_filters[column_name][rule_number].get("numerical_value", default_value),
-                min_value=min_value,
-                max_value=max_value,
-                key=unique_key,  # 🔹 Unique key per filter element
-                on_change=apply_filter  # ✅ Trigger filter function
+            # 🔹 Unique keys for Streamlit widgets
+            min_key = f"{column_name}_{rule_number}_{index}_min"
+            max_key = f"{column_name}_{rule_number}_{index}_max"
+
+            # ✅ Min Value Input (Allows any value)
+            new_min_value = st.sidebar.number_input(
+                f"Min Value for {column_name}",
+                value=default_min,
+                key=min_key
             )
 
-            # Store selected filter value
-            selected_filters[column_name][rule_number]["numerical_value"] = new_value
+            # ✅ Max Value Input (Allows any value)
+            new_max_value = st.sidebar.number_input(
+                f"Max Value for {column_name}",
+                value=default_max,
+                min_value=new_min_value,  # ✅ Ensures min ≤ max dynamically
+                key=max_key
+            )
 
-    # Store updated filters
+            # ✅ Store updated values in session state
+            selected_filters[column_name][rule_number]["min"] = new_min_value
+            selected_filters[column_name][rule_number]["max"] = new_max_value
+
+            # ✅ **Show warning if out of range**
+            if min_constraint is not None and new_min_value < min_constraint:
+                st.sidebar.warning(f"⚠️ Min Value ({new_min_value}) is below the defined constraint ({min_constraint}).")
+            if max_constraint is not None and new_max_value > max_constraint:
+                st.sidebar.warning(f"⚠️ Max Value ({new_max_value}) exceeds the defined constraint ({max_constraint}).")
+
+    # ✅ Store updated filters in session state
     st.session_state["selected_filters"] = selected_filters
-
 
 get_rules_sidebar()
 
