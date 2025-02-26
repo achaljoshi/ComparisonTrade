@@ -348,9 +348,7 @@ class DataProcessor:
         else:
             raise TypeError(f"Invalid file type received: {type(file)}")
 
-    def compare_files(
-        self, df_baseline=None, df_candidate=None, file_type="Excel", filters=None
-    ):
+    def compare_files(self, df_baseline=None, df_candidate=None, file_type="Excel", filters=None):
         """Compare Baseline and Candidate files using dynamically defined rules from rules_config.json."""
         if filters is None:
             filters = {}
@@ -359,28 +357,8 @@ class DataProcessor:
             df_baseline, df_candidate = df_baseline.copy(), df_candidate.copy()
         else:
             input_file_baseline, input_file_candidate, _ = self.resolve_file_paths()
-
-            # ✅ Call `read_file()` to support all formats
-            df_baseline = self.read_file(
-                (
-                    input_file_baseline
-                    if isinstance(input_file_baseline, (BytesIO))
-                    else Path(input_file_baseline)
-                ),
-                file_type,
-            )
-            df_candidate = self.read_file(
-                (
-                    input_file_candidate
-                    if isinstance(input_file_candidate, (BytesIO))
-                    else Path(input_file_candidate)
-                ),
-                file_type,
-            )
-
-        print("Baseline Data (Before Cleaning):\n", df_baseline.head())
-        print("Candidate Data (Before Cleaning):\n", df_candidate.head())
-
+            df_baseline = self.read_file(input_file_baseline, file_type)
+            df_candidate = self.read_file(input_file_candidate, file_type)
         if isinstance(self.rules_config, str):
             print(
                 "🚨 ERROR: rules_config is a string instead of a dictionary! Decoding JSON..."
@@ -393,11 +371,10 @@ class DataProcessor:
             raise ValueError(
                 "Error: 'rules' key not found or incorrectly formatted in rules_config.json. Please check your config file."
             )
-
         key_column = self.rules_config["identifier"]
         if not key_column:
             raise ValueError(
-                "Error: 'messageId' key not found in rules_config.json under 'rules'. Please check your config file."
+                "Error: Identifier key not found in rules_config.json under 'rules'. Please check your config file."
             )
 
         df_baseline.columns = df_baseline.columns.astype(str).str.strip()
@@ -523,6 +500,12 @@ class DataProcessor:
             )
 
     def extract_discrepancy(self, df_merged, discrepancies, filters, key_column):
+        """Extract discrepancies dynamically based on rule constraints and filter settings."""
+
+        # ✅ Ensure classification column exists
+        if "classification" not in df_merged.columns:
+            df_merged["classification"] = "UNCATEGORIZED"
+
         for column_name, rules in self.rules_config["rules"].items():
             for rule in rules:
                 if not isinstance(rule, dict):
@@ -532,70 +515,62 @@ class DataProcessor:
 
                 rule_number = rule.get("Rule Number", "N/A")
                 rule_type = rule.get("type", "Unknown")
+                rule_category = rule.get("category", "General")  # ✅ Fix category assignment
                 rule_description = rule.get("description", "No description available")
 
                 for col in rule.get("columns", []):
+                    pattern = re.compile(fr"{col}\[\d+\]")
 
-                    pattern = re.compile(r"{col}\[\d+\]")
-
-                    if any(pattern.fullmatch(col) for col in df_merged.columns):
-                        print("Columns matching 'arrays[N]' pattern exist")
-                    else:
-                        print("No matching columns found")
-
-                    matching_columns = [
-                        col for col in df_merged.columns if pattern.fullmatch(col)
-                    ]
-                    print("Matching Columns:", matching_columns)
+                    matching_columns = [c for c in df_merged.columns if pattern.fullmatch(c)]
+                    print(f"Matching Columns for {col}: {matching_columns}")
 
                     col_baseline = f"{col}_baseline"
                     col_candidate = f"{col}_candidate"
 
-                    if (
-                        col_baseline in df_merged.columns
-                        and col_candidate in df_merged.columns
-                    ):
-                        updated_constraint_min = filters.get(rule_number, {}).get(
-                            "constraints_min",
-                            rule.get("constraints", {}).get("min", float("inf")),
+                    if col_baseline in df_merged.columns and col_candidate in df_merged.columns:
+                        # ✅ Retrieve min/max constraints dynamically
+                        updated_constraint_min = filters.get(column_name, {}).get(
+                            rule_number, {}).get("min",
+                            rule.get("constraints", {}).get("min", float("-inf"))
                         )
-                        updated_constraint_max = filters.get(rule_number, {}).get(
-                            "constraints_max",
-                            rule.get("constraints", {}).get("max", float("inf")),
+                        updated_constraint_max = filters.get(column_name, {}).get(
+                            rule_number, {}).get("max",
+                            rule.get("constraints", {}).get("max", float("inf"))
                         )
 
                         if "constraints" in rule:
                             df_merged["rule_violation"] = abs(
-                                pd.to_numeric(df_merged[col_candidate], errors="coerce")
-                                - pd.to_numeric(
-                                    df_merged[col_baseline], errors="coerce"
-                                )
+                                pd.to_numeric(df_merged[col_candidate], errors="coerce") -
+                                pd.to_numeric(df_merged[col_baseline], errors="coerce")
                             )
-                            self._extracted_discrepancy_classification(
-                                rule,
-                                df_merged,
-                                updated_constraint_min,
-                                updated_constraint_max,
+
+                            # ✅ Apply classification before filtering
+                            df_filtered = self._extracted_discrepancy_classification(
+                                rule, df_merged, updated_constraint_min, updated_constraint_max
                             )
+
+                            # # ✅ Filter out discrepancies within allowed range **before adding to discrepancies list**
+                            # df_filtered = df_merged[
+                            #     (df_merged["rule_violation"] > updated_constraint_min) &  # ✅ Must be strictly greater
+                            #     (df_merged["rule_violation"] < updated_constraint_max)  # ✅ Must be strictly less
+                            # ].copy()
+
                         else:
-                            df_merged["rule_violation"] = df_merged.apply(
+                            # ✅ For non-numeric checks (direct mismatches)
+                            df_filtered["rule_violation"] = df_merged.apply(
                                 lambda row: row[col_baseline] != row[col_candidate],
                                 axis=1,
                             )
-                            df_merged.loc[
-                                df_merged["rule_violation"], "classification"
-                            ] = rule.get("category", "None")
 
+                            df_filtered = df_filtered[df_filtered["rule_violation"]].copy()
+
+                        # ✅ Ensure the category is assigned properly
+                        df_filtered["classification"] = rule_category
+
+                        # ✅ Add discrepancies from filtered dataset
                         self.final_discrepancy_list(
-                            df_merged,
-                            discrepancies,
-                            key_column,
-                            rule_number,
-                            rule_type,
-                            rule_description,
-                            col,
-                            col_baseline,
-                            col_candidate,
+                            df_filtered, discrepancies, key_column, rule_number, rule_type, rule_category,  # ✅ Pass category
+                            rule_description, col, col_baseline, col_candidate
                         )
 
     def final_discrepancy_list(
@@ -605,24 +580,27 @@ class DataProcessor:
         key_column,
         rule_number,
         rule_type,
+        rule_category,  # ✅ New parameter added for correct category assignment
         rule_description,
-        col,
-        col_baseline,
-        col_candidate,
+        output_column_name,
+        base_val,
+        cand_val,
     ):
+        """Ensures correct category assignment while appending discrepancies."""
         for _, row in df_merged[df_merged["rule_violation"] > 0].iterrows():
             discrepancies.append(
                 {
                     key_column: row[key_column],
-                    "Column Name": col,
+                    "Column Name": output_column_name,
                     "Rule Type": rule_type,
-                    "category": row["classification"],
+                    "category": rule_category,  # ✅ Fix: Pass the correct category from the rule
                     "Rule Number": rule_number,
                     "Description": rule_description,
-                    "Baseline Field Value": row[col_baseline],
-                    "Candidate Field Value": row[col_candidate],
+                    "Baseline Field Value": base_val,
+                    "Candidate Field Value": cand_val,
                 }
             )
+
 
     def get_arrays(
         self,
@@ -639,6 +617,8 @@ class DataProcessor:
             rule_number = rule.get("Rule Number", "N/A")
             rule_type = rule.get("type", "Unknown")
             rule_description = rule.get("description", "No description available")
+            rule_category = rule.get("category", "General")  # ✅ Added rule_category extraction
+
             if "constraints" in rule:
                 min_arrays = rule["constraints"].get("min", min_arrays)
                 max_arrays = rule["constraints"].get("max", max_arrays)
@@ -654,9 +634,7 @@ class DataProcessor:
                 + r"\s*\}"
             )
 
-            print(
-                f"🔹 Generated Regex Pattern: {array_pattern.pattern}"
-            )  # ✅ Debugging Output
+            print(f"🔹 Generated Regex Pattern: {array_pattern.pattern}")  # ✅ Debugging Output
 
             if array_rule_key in self.rules_config["rules"]:
                 format_type = next(
@@ -670,98 +648,39 @@ class DataProcessor:
             else:
                 format_type = None
 
+            # ✅ Extract relevant columns
             if format_type == "Array":
-                # Match columns (Array Format)
                 array_columns_baseline = [
-                    col
-                    for col in df_merged.columns
-                    if re.search(
-                        rf"{re.escape(array_rule_key)}\[\d+\]_baseline", col
-                    )
+                    col for col in df_merged.columns if re.search(rf"{re.escape(array_rule_key)}\[\d+\]_baseline", col)
                 ]
                 array_columns_candidate = [
-                    col
-                    for col in df_merged.columns
-                    if re.search(
-                        rf"{re.escape(array_rule_key)}\[\d+\]_candidate", col
-                    )
+                    col for col in df_merged.columns if re.search(rf"{re.escape(array_rule_key)}\[\d+\]_candidate", col)
                 ]
-                print(
-                    f"🔹 Extracted Array Columns (Baseline): {array_columns_baseline}"
-                )
-                print(
-                    f"🔹 Extracted Array Columns (Candidate): {array_columns_candidate}"
-                )
-
             elif format_type == "Object":
-                # Match matchId columns (Object Format)
                 array_columns_baseline = [
-                    col
-                    for col in df_merged.columns
-                    if re.search(rf"{re.escape(array_rule_key)}_baseline", col)
+                    col for col in df_merged.columns if re.search(rf"{re.escape(array_rule_key)}_baseline", col)
                 ]
                 array_columns_candidate = [
-                    col
-                    for col in df_merged.columns
-                    if re.search(rf"{re.escape(array_rule_key)}_candidate", col)
+                    col for col in df_merged.columns if re.search(rf"{re.escape(array_rule_key)}_candidate", col)
                 ]
-                print(
-                    f"🔹 Extracted Object Columns (Baseline): {array_columns_baseline}"
-                )
-                print(
-                    f"🔹 Extracted Object Columns (Candidate): {array_columns_candidate}"
-                )
-
             else:
-                print(
-                    f"⚠️ Warning: Format type unknown for {array_rule_key}, no extraction applied."
-                )
                 array_columns_baseline, array_columns_candidate = [], []
 
-            print(
-                f"🔹 Extracted array_rule_key columns (Baseline): {array_columns_baseline}"
-            )
-            print(
-                f"🔹 Extracted array_rule_key columns (Candidate): {array_columns_candidate}"
-            )
+            print(f"🔹 Extracted array_rule_key columns (Baseline): {array_columns_baseline}")
+            print(f"🔹 Extracted array_rule_key columns (Candidate): {array_columns_candidate}")
 
             # ✅ Iterate over all rows
             for _, row in df_merged.iterrows():
                 if format_type == "Array":
-                    baseline_str = " ".join(
-                        str(row[col])
-                        for col in array_columns_baseline
-                        if pd.notna(row[col])
-                    )
-                    candidate_str = " ".join(
-                        str(row[col])
-                        for col in array_columns_candidate
-                        if pd.notna(row[col])
-                    )
-
+                    baseline_str = " ".join(str(row[col]) for col in array_columns_baseline if pd.notna(row[col]))
+                    candidate_str = " ".join(str(row[col]) for col in array_columns_candidate if pd.notna(row[col]))
                 elif format_type == "Object":
-                    baseline_str = (
-                        str(row[array_columns_baseline[0]])
-                        if array_columns_baseline
-                        else ""
-                    )
-                    candidate_str = (
-                        str(row[array_columns_candidate[0]])
-                        if array_columns_candidate
-                        else ""
-                    )
-
-                # ✅ Debugging output
-                print(f"\nRow Index: {row.name}")
-                print("Baseline arrays Raw String:", baseline_str)
-                print("Candidate arrays Raw String:", candidate_str)
+                    baseline_str = str(row[array_columns_baseline[0]]) if array_columns_baseline else ""
+                    candidate_str = str(row[array_columns_candidate[0]]) if array_columns_candidate else ""
 
                 # ✅ Extract matches using regex
                 baseline_matches = array_pattern.findall(baseline_str)
                 candidate_matches = array_pattern.findall(candidate_str)
-
-                print("Regex Matches for Baseline:", baseline_matches)
-                print("Regex Matches for Candidate:", candidate_matches)
 
                 # ✅ Convert extracted matches into dictionaries
                 baseline_arrays = {
@@ -776,75 +695,48 @@ class DataProcessor:
                 }
 
                 # ✅ Iterate over all array_rule_key indices from both datasets -- for arrays
-                for idx in set(baseline_arrays.keys()).union(
-                    candidate_arrays.keys()
-                ):
+                for idx in set(baseline_arrays.keys()).union(candidate_arrays.keys()):
                     base_values = baseline_arrays.get(idx, {})
                     cand_values = candidate_arrays.get(idx, {})
 
                     for field in sub_columns:  # ✅ Iterate dynamically over sub_columns
-
-                        if len(baseline_arrays) > 1 and len(candidate_arrays) > 1:
-                            output_column_name = f"{array_rule_key}[{idx}].{field}"
-                        else:
-                            output_column_name = f"{array_rule_key}.{field}"
-
+                        output_column_name = f"{array_rule_key}[{idx}].{field}" if len(baseline_arrays) > 1 else f"{array_rule_key}.{field}"
+                        
                         base_val = base_values.get(field)
                         cand_val = cand_values.get(field)
 
                         if "constraints" in rule:
-                            df_merged["rule_violation"] = abs(
-                                pd.to_numeric(base_val) - pd.to_numeric(cand_val)
-                            )
-                            self._extracted_discrepancy_classification(
-                                rule, df_merged, min_arrays, max_arrays
-                            )
-                        self.discrepancy_list(
+                            df_merged["rule_violation"] = abs(pd.to_numeric(base_val) - pd.to_numeric(cand_val))
+                            self._extracted_discrepancy_classification(rule, df_merged, min_arrays, max_arrays)
+
+                        # ✅ Updated to pass `rule_category`
+                        self.final_discrepancy_list(
                             df_merged,
                             discrepancies,
                             key_column,
                             rule_number,
                             rule_type,
+                            rule_category,  # ✅ Now passing rule_category
                             rule_description,
                             output_column_name,
                             base_val,
                             cand_val,
                         )
 
-    def discrepancy_list(
-        self,
-        df_merged,
-        discrepancies,
-        key_column,
-        rule_number,
-        rule_type,
-        rule_description,
-        output_column_name,
-        base_val,
-        cand_val,
-    ):
-        for _, row in df_merged[df_merged["rule_violation"] > 0].iterrows():
-            discrepancies.append(
-                {
-                    key_column: row[key_column],
-                    "Column Name": output_column_name,
-                    "Rule Type": rule_type,
-                    "category": row["classification"],
-                    "Rule Number": rule_number,
-                    "Description": rule_description,
-                    "Baseline Field Value": base_val,
-                    "Candidate Field Value": cand_val,
-                }
-            )
 
-    def _extracted_discrepancy_classification(self, rule, df_merged, arg2, arg3):
-        df_merged.loc[df_merged["rule_violation"] <= arg2, "classification"] = rule.get(
+    def _extracted_discrepancy_classification(self, rule, df_merged, min_val, max_val):
+        """Apply correct classification based on rule constraints."""
+        if "classification" not in df_merged.columns:
+            df_merged["classification"] = "UNCATEGORIZED"  # ✅ Ensure column exists
+
+        df_merged.loc[df_merged["rule_violation"] <= min_val, "classification"] = rule.get(
             "category", "ACCEPTABLE"
         )
-        df_merged.loc[df_merged["rule_violation"] >= arg3, "classification"] = rule.get(
+        df_merged.loc[df_merged["rule_violation"] >= max_val, "classification"] = rule.get(
             "category", "FATAL"
         )
         df_merged.loc[
-            (df_merged["rule_violation"] > arg2) & (df_merged["rule_violation"] < arg3),
+            (df_merged["rule_violation"] > min_val) & (df_merged["rule_violation"] < max_val),
             "classification",
         ] = rule.get("category", "WARNING")
+        return df_merged
