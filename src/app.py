@@ -27,19 +27,6 @@ if os.path.exists(cache_dir):
 
 # **✅ Ensure `st.set_page_config()` is first**
 st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
-st.markdown(
-        """
-        <style>
-        [data-testid="stSidebarNav"] {
-            background-image: url(https://www.mabl.com/hs-fs/hubfs/logo-coforge.png?width=900&name=logo-coforge.png);
-            background-repeat: no-repeat;
-            padding-top: 120px;
-            background-position: 20px 20px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
 
 # ✅ Clear Cache & Restart Button
 if st.sidebar.button("🔄 Clear Cache & Restart", key="restart_button"):
@@ -50,7 +37,6 @@ if st.sidebar.button("🔄 Clear Cache & Restart", key="restart_button"):
 # ✅ Ensure session state variables persist
 if "screen" not in st.session_state:
     st.session_state["screen"] = "upload_config"
-
 if "directory_config_path" not in st.session_state:
     st.session_state["directory_config_path"] = None
 if "job_response_path" not in st.session_state:
@@ -69,57 +55,6 @@ required_files = {
     "rules_config.json": "rules_config_path"
 }
 
-def apply_filter():
-    """Dynamically applies selected filters and updates the results in real-time."""
-
-    if "filtered_results" not in st.session_state or st.session_state["filtered_results"].empty:
-        st.warning("No results available for filtering. Please upload and compare files first.")
-        return
-
-    df = st.session_state["filtered_results"].copy()
-    selected_filters = st.session_state.get("selected_filters", {})
-
-    try:
-        for column, rules in selected_filters.items():
-            if column not in df.columns:  # ✅ Check if column exists in DataFrame
-                st.warning(f"Column `{column}` not found in dataset. Skipping filter.")
-                continue
-
-            for rule_number, rule_values in rules.items():
-                if "numerical_value" in rule_values:
-                    # ✅ Apply numerical filters only if the column exists
-                    df = df[df[column] >= rule_values["numerical_value"]]
-
-        # ✅ Store updated results
-        st.session_state["filtered_results"] = df
-        st.success("✅ Filters Applied Successfully!")
-        st.rerun()
-
-    except Exception as e:
-        st.error(f"❌ Error applying filters: {str(e)}")
-
-
-
-
-def file_upload():
-    global f, e
-    for file_name, key in missing_files.items():
-        uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=key)
-
-        if uploaded_file is not None:
-            save_path = os.path.join(temp_dir, file_name)  # ✅ Save in a unique temp directory
-
-            try:
-                # ✅ Ensure safe file writing (avoids permission errors)
-                with open(save_path, "wb") as f:
-                    shutil.copyfileobj(uploaded_file, f)  # ✅ Efficient way to copy file content
-
-                uploaded_files[key] = save_path  # ✅ Store path in dictionary
-                st.success(f"`{file_name}` uploaded successfully!")
-
-            except Exception as e:
-                st.error(f"❌ Error saving `{file_name}`: {e}")
-
 
 # ✅ Step 1: Upload Configuration Files
 if st.session_state["screen"] == "upload_config":
@@ -136,6 +71,24 @@ if st.session_state["screen"] == "upload_config":
     uploaded_files = {}
 
     temp_dir = tempfile.mkdtemp()
+    def file_upload():
+        global f, e
+        for file_name, key in missing_files.items():
+            uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=key)
+
+            if uploaded_file is not None:
+                save_path = os.path.join(temp_dir, file_name)  # ✅ Save in a unique temp directory
+
+                try:
+                    # ✅ Ensure safe file writing (avoids permission errors)
+                    with open(save_path, "wb") as f:
+                        shutil.copyfileobj(uploaded_file, f)  # ✅ Efficient way to copy file content
+
+                    uploaded_files[key] = save_path  # ✅ Store path in dictionary
+                    st.success(f"`{file_name}` uploaded successfully!")
+
+                except Exception as e:
+                    st.error(f"❌ Error saving `{file_name}`: {e}")
 
     file_upload()
 
@@ -157,19 +110,18 @@ if st.session_state["screen"] == "upload_config":
     st.stop()
 
 # ✅ Cleanup function: Delete temp files & folder
-def cleanup_temp_files():
-    try:
-        for file_path in uploaded_files.values():
-            if os.path.exists(file_path):
-                os.remove(file_path)  # ✅ Delete individual temp files
-        
-        shutil.rmtree(temp_dir)  # ✅ Remove the entire temp directory
-        st.success("Temporary files cleaned up successfully!")
-
-    except Exception as e:
-        st.error(f"❌ Error during cleanup: {e}")
-
 if st.button("🗑️ Cleanup Temporary Files"):
+    def cleanup_temp_files():
+        try:
+            for file_path in uploaded_files.values():
+                if os.path.exists(file_path):
+                    os.remove(file_path)  # ✅ Delete individual temp files
+            
+            shutil.rmtree(temp_dir)  # ✅ Remove the entire temp directory
+            st.success("Temporary files cleaned up successfully!")
+
+        except Exception as e:
+            st.error(f"❌ Error during cleanup: {e}")
     cleanup_temp_files()
 
 # ✅ Step 2: Select File Type
@@ -215,8 +167,6 @@ if st.session_state["screen"] == "file_selection":
             )
     
             file_type = st.session_state["file_type"]
-    
-            # ✅ Auto-detect file type based on extension
             def detect_file_type(file):
                 filename = file.name.lower()
                 if filename.endswith(".xlsx") or filename.endswith(".xls") and file_type == "Excel":
@@ -266,6 +216,8 @@ if st.session_state["screen"] == "file_selection":
             # ✅ Store results in session state
             st.session_state["results"] = results
             st.session_state["filtered_results"] = results
+            st.session_state["uploaded_file_baseline"] = uploaded_file_baseline
+            st.session_state["uploaded_file_candidate"] = uploaded_file_candidate
     
         except Exception as e:
             st.error(f"Error processing files: {str(e)}")
@@ -283,102 +235,53 @@ else:
 st.sidebar.header("🔍 Filter Rules")
 selected_filters = st.session_state.get("selected_filters", {})
 
-def generate_unique_key(column_name, rule_number, rule_type, rule_id, index):
-    """Generate a fully unique key using hashing, UUID, and indexing."""
-    hash_string = f"{column_name}_{rule_number}_{rule_type}_{rule_id}_{index}_{uuid.uuid4().hex}"
-    return hashlib.md5(hash_string.encode()).hexdigest()[:8] + f"_{rule_id}_{index}"
+for category, rules in rules_config.get("rules", {}).items():
+    for rule in rules:
+        rule_number = rule.get("Rule Number", "Unknown Rule")
+        rule_type = rule.get("type", "Unknown Type")
+        rule_columns = ", ".join(rule.get("columns", []))
+        rule_description = rule.get("description", "No Description")
+        constraints = rule.get("constraints", {})
+        sub_columns = rule.get("sub_columns", [])
 
-def convert_to_numeric(value):
-    """Converts a string value to int or float if possible, otherwise returns None."""
-    if isinstance(value, (int, float)):
-        return value
-    if isinstance(value, str) and value.replace(".", "").isdigit():
-        return float(value) if "." in value else int(value)
-    return None  # If conversion fails, return None
+        rule_key_prefix = f"{category}_{rule_number}"
+        st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
+        st.sidebar.write(f"📝 Columns: {rule_columns}")
+        st.sidebar.write(f"📌 Description: {rule_description}")
 
-def get_rules_sidebar():
-    """Generates a Streamlit sidebar with dynamically populated rule filters for constraints."""
-    selected_filters = st.session_state.get("selected_filters", {})
+        selected_filters.setdefault(rule_key_prefix, {})
 
-    for column_name, rules in rules_config.get("rules", {}).items():
-        for index, rule in enumerate(rules):
-            if not isinstance(rule, dict):
-                continue
-
-            rule_number = rule.get("Rule Number", "Unknown Rule")
-            rule_type = rule.get("type", "Unknown Type")
-
-            st.sidebar.subheader(f"{column_name} - {rule_type}")
-
-            if column_name not in selected_filters:
-                selected_filters[column_name] = {}
-            if rule_number not in selected_filters[column_name]:
-                selected_filters[column_name][rule_number] = {}
-
-            # Only apply constraints
-            min_value = rule.get("constraints", {}).get("min", None)
-            max_value = rule.get("constraints", {}).get("max", None)
-            default_value = min_value if min_value is not None else 0
-
-            new_value = st.sidebar.number_input(
-                f"{column_name} - {rule_type}",
-                value=selected_filters[column_name][rule_number].get("numerical_value", default_value),
-                min_value=min_value,
-                max_value=max_value,
-                key=f"{column_name}_{rule_number}_value",
-                on_change=lambda: apply_filter()  # ✅ Trigger filter function
-            )
-
-            selected_filters[column_name][rule_number]["numerical_value"] = new_value
-
-    st.session_state["selected_filters"] = selected_filters
-
-def get_rules_sidebar():
-    """Generates a Streamlit sidebar with dynamically populated rule filters for constraints."""
-    selected_filters = st.session_state.get("selected_filters", {})
-
-    for column_name, rules in rules_config.get("rules", {}).items():
-        for index, rule in enumerate(rules):  # Iterate with index to ensure uniqueness
-            if not isinstance(rule, dict):
-                continue
-
-            rule_number = rule.get("Rule Number", "Unknown Rule")
-            rule_type = rule.get("type", "Unknown Type")
-
-            st.sidebar.subheader(f"{column_name} - {rule_type}")
-
-            # Ensure structure exists in session state
-            if column_name not in selected_filters:
-                selected_filters[column_name] = {}
-            if rule_number not in selected_filters[column_name]:
-                selected_filters[column_name][rule_number] = {}
-
-            # Only process constraints
-            min_value = rule.get("constraints", {}).get("min", None)
-            max_value = rule.get("constraints", {}).get("max", None)
-            default_value = min_value if min_value is not None else 0
-
-            # ✅ Ensure the key is **always unique**
-            unique_key = f"{column_name}_{rule_number}_{index}_value"
-
-            new_value = st.sidebar.number_input(
-                f"{column_name} - {rule_type}",
-                value=selected_filters[column_name][rule_number].get("numerical_value", default_value),
-                min_value=min_value,
-                max_value=max_value,
-                key=unique_key,  # 🔹 Unique key per filter element
-                on_change=apply_filter  # ✅ Trigger filter function
-            )
-
-            # Store selected filter value
-            selected_filters[column_name][rule_number]["numerical_value"] = new_value
-
-    # Store updated filters
-    st.session_state["selected_filters"] = selected_filters
-
-
-get_rules_sidebar()
-
+        for key, value in rule.items():
+            if key == "constraints" and isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    input_key = f"{rule_key_prefix}_{key}_{sub_key}"
+                    prev_value = selected_filters[rule_key_prefix].get(input_key, sub_value)
+                    new_value = st.sidebar.number_input(
+                        f"{sub_key.capitalize()} for {rule_number}", value=prev_value, key=input_key
+                    )
+                    selected_filters[rule_key_prefix][input_key] = new_value
+            # elif key == "valid_values" and isinstance(value, list) and value:
+            #     input_key = f"{rule_key_prefix}_{key}"
+            #     prev_value = selected_filters[rule_key_prefix].get(input_key, value[0])
+            #     new_value = st.sidebar.selectbox(
+            #         f"Valid Values for {rule_number}", value, index=value.index(prev_value), key=input_key
+            #     )
+            #     selected_filters[rule_key_prefix][input_key] = new_value
+            # elif key == "sub_columns" and isinstance(value, list):
+            #     for sub_column in value:
+            #         input_key = f"{rule_key_prefix}_{sub_column}"
+            #         prev_value = selected_filters[rule_key_prefix].get(input_key, 0)
+            #         new_value = st.sidebar.number_input(
+            #             f"{sub_column.capitalize()} for {rule_number}", value=prev_value, key=input_key
+            #         )
+            #         selected_filters[rule_key_prefix][input_key] = new_value
+            elif isinstance(value, (int, float)):
+                input_key = f"{rule_key_prefix}_{key}"
+                prev_value = selected_filters[rule_key_prefix].get(input_key, value)
+                new_value = st.sidebar.number_input(
+                    f"{key.capitalize()} for {rule_number}", value=prev_value, key=input_key
+                )
+                selected_filters[rule_key_prefix][input_key] = new_value
 
 # Store selected filters in session state
 st.session_state["selected_filters"] = selected_filters
@@ -386,21 +289,72 @@ st.session_state["selected_filters"] = selected_filters
 
 # ✅ Buttons
 apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
-if reset_filter_clicked := st.sidebar.button(
-    "♻️ Reset Filters", key="reset_filter_button"
-):
+reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
+
+# ✅ Reset Filters
+if reset_filter_clicked:
     st.session_state["selected_filters"] = {}
     st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
     st.rerun()
 
-
 # ✅ Apply Filters
 if apply_filter_clicked and "results" in st.session_state:
-    try:
-        apply_filter()
+    processor = DataProcessor(
+                st.session_state["directory_config_path"],
+                st.session_state["job_response_path"],
+                st.session_state["rules_config_path"]
+            )
+    
+    file_type = st.session_state["file_type"]
+    def detect_file_type(file):
+        filename = file.name.lower()
+        if filename.endswith(".xlsx") or filename.endswith(".xls") and file_type == "Excel":
+            return "Excel"
+        elif filename.endswith(".txt") and file_type == "DD":
+            return "DD"
+        elif filename.endswith(".txt") and file_type == "Text":
+            return "TEXT"
+        elif filename.endswith(".csv") and file_type == "Text":
+            return "CSV"
+        elif filename.endswith(".json") and file_type == "Text":
+            return "JSON"
+        elif filename.endswith(".log") and file_type == "Text":
+            return "LOG"
+        else:
+            raise ValueError("Unsupported file format.")
 
-    except Exception as e:
-        st.error(f"Error applying filters: {str(e)}")
+    file_type = detect_file_type(uploaded_file_baseline)
+    st.session_state["file_type"] = file_type  # ✅ Ensure file type is set in session
+
+    # ✅ Convert uploaded files to `BytesIO`
+    baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
+    candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
+
+    # ✅ Reset file pointer before reading (important for Streamlit uploads)
+    baseline_bytes.seek(0)
+    candidate_bytes.seek(0)
+
+    # ✅ Read files using `read_file()` from DataProcessor
+    df_baseline = processor.read_file(baseline_bytes, file_type)
+    df_candidate = processor.read_file(candidate_bytes, file_type)
+
+    # ✅ Debugging: Display sample data
+    st.write("✅ Uploaded files successfully converted to DataFrames.")
+    print("✅ Baseline DataFrame:\n", df_baseline.head())
+    print("✅ Candidate DataFrame:\n", df_candidate.head())
+
+    # ✅ Ensure files are not empty
+    if df_baseline.empty or df_candidate.empty:
+        st.error("One of the uploaded files is empty. Please check your data.")
+        st.stop()
+
+    # ✅ Run Comparison
+    updated_results = processor.compare_files(df_baseline, df_candidate, file_type)
+    st.success("✅ Comparison Completed! Discrepancy report generated.")
+
+    st.session_state["results"] = updated_results
+    st.session_state["filtered_results"] = updated_results
+    st.rerun()
 
 
 # **📤 Export Button**
@@ -419,17 +373,19 @@ if job_response_path and os.path.exists(job_response_path):
 else:
     job_response = None
 
-
-def get_file_name():
+if not filtered_results.empty and job_response:
     # ✅ Generate Filename Using Job Response Data
     baseline_env = job_response["baseline"]["env"]
     candidate_env = job_response["candidate"]["env"]
     baseline_label = job_response["baseline"]["label"]
     candidate_label = job_response["candidate"]["label"]
+
     filename = f"discrepancy_report_{baseline_env}_{candidate_env}_{baseline_label}_{candidate_label}"
+
     # ✅ Export Data Based on Format
     export_data = None
     mime_type = "text/plain"
+
     if export_format == "CSV":
         export_data = filtered_results.to_csv(index=False).encode("utf-8")
         filename += ".csv"
@@ -452,6 +408,7 @@ def get_file_name():
         export_data = filtered_results.to_string(index=False).encode("utf-8")
         filename += ".txt"
         mime_type = "text/plain"
+
     if export_data:
         st.download_button(
             label="📥 Download Report",
@@ -462,28 +419,28 @@ def get_file_name():
     else:
         st.warning("Unsupported export format. Defaulting to CSV.")
 
-
-if not filtered_results.empty and job_response:
-    get_file_name()
-
 # ✅ Display Results
 filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
-
-
-def get_key_performance():
-    global count
+if not filtered_results.empty:
     st.header("📊 Key Performance Indicators")
-    # ✅ Ensure consistent capitalization in category column
+
+    # ✅ Ensure consistent capitalization in Category column
     filtered_results["category"] = filtered_results["category"].str.upper()
+
     # ✅ Count each unique category dynamically
     category_counts = filtered_results["category"].value_counts().to_dict()
+
+
     # ✅ Identify Missing Rows
     missing_baseline_count = (filtered_results["Rule Type"] == "Missing in Baseline").sum()
     missing_candidate_count = (filtered_results["Rule Type"] == "Missing in Candidate").sum()
+
     # ✅ Total metrics to display
     total_metrics = len(category_counts) + 3  # Dynamic categories + threshold + missing rows
+
     # ✅ Create correct number of columns
     kpi_columns = st.columns(min(total_metrics, 4))  # Limit to 4 columns for layout readability
+
     # ✅ Display each category dynamically
     i = 0
     kpi_columns[i % len(kpi_columns)].metric("🔍 Total Discrepancies", len(filtered_results))
@@ -491,9 +448,11 @@ def get_key_performance():
     for category, count in category_counts.items():
         kpi_columns[i % len(kpi_columns)].metric(f"{category}", count)
         i += 1
+
     kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Baseline", missing_baseline_count)
     i += 1
     kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Candidate", missing_candidate_count)
+
     # ✅ Extract unique categories dynamically
     unique_categories = filtered_results["category"].unique()
     # ✅ Generate distinct colors dynamically using Plotly's color palette
@@ -513,14 +472,13 @@ def get_key_performance():
         color_discrete_map=color_map  # ✅ Now dynamically generated
     )
     st.plotly_chart(fig, use_container_width=True)
-    # ✅ **Pie Chart: category Distribution**
+
+
+    # ✅ **Pie Chart: Category Distribution**
     st.header("Discrepancy Distribution")
     pie_chart = px.pie(filtered_results, names="category", title="Proportion of Discrepancy Types", hole=0.4)
     st.plotly_chart(pie_chart, use_container_width=True)
+
     # ✅ **Filtered Data Table Based on Selected Column**
     st.header("Discrepancy Details")
     st.dataframe(filtered_results)
-
-
-if not filtered_results.empty:
-    get_key_performance()

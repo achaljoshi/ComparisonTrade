@@ -442,18 +442,18 @@ class DataProcessor:
         )
 
         if array_rule_key:
-            self.get_arrays_rules(
+            updated_discrepancies = self.get_arrays_rules(
                 df_merged, discrepancies, key_column, array_rule_key
             )
 
         # ✅ For handling normal objects
-        self.extract_discrepancy(df_merged, discrepancies, filters, key_column)
+        updated_discrepancies = self.extract_discrepancy(df_merged, discrepancies, filters, key_column)
 
         # ✅ Include Missing Rows
-        self.missing_row_candidate(discrepancies, extra_rows_baseline, key_column)
+        updated_discrepancies = self.missing_row_candidate(discrepancies, extra_rows_baseline, key_column)
+        updated_discrepancies = self.missing_row_baseline(discrepancies, extra_rows_candidate, key_column)
 
-        self.missing_row_baseline(discrepancies, extra_rows_candidate, key_column)
-        discrepancies_df = pd.DataFrame(discrepancies)
+        discrepancies_df = pd.DataFrame(updated_discrepancies)
         discrepancies_df = discrepancies_df.astype(str)
         print(discrepancies_df)
 
@@ -465,9 +465,7 @@ class DataProcessor:
         )
         raise ValueError(f"Key identifier '{key_column}' not found in dataset.")
 
-    def get_arrays_rules(
-        self, df_merged, discrepancies, key_column, array_rule_key
-    ):
+    def get_arrays_rules(self, df_merged, discrepancies, key_column, array_rule_key):
         array_rules = self.rules_config["rules"].get(array_rule_key, [])
         # ✅ Dynamically extract sub-columns from rules_config.json
         sub_columns = next(
@@ -481,7 +479,7 @@ class DataProcessor:
         print(f"🔹 Extracted sub_columns: {sub_columns}")  # ✅ Debugging Output
         # ✅ For handling arrays
         min_arrays, max_arrays, predefined_values = 0, 0, set()
-        self.get_arrays(
+        discrepancies = self.get_arrays(
             df_merged,
             discrepancies,
             key_column,
@@ -491,6 +489,7 @@ class DataProcessor:
             array_rule_key,
             array_rules,
         )
+        return discrepancies
 
     def missing_row_baseline(self, discrepancies, extra_rows_candidate, key_column):
         for _, row in extra_rows_candidate.iterrows():
@@ -506,6 +505,7 @@ class DataProcessor:
                     "Candidate Field Value": row.to_dict(),
                 }
             )
+        return discrepancies
 
     def missing_row_candidate(self, discrepancies, extra_rows_baseline, key_column):
         for _, row in extra_rows_baseline.iterrows():
@@ -521,6 +521,7 @@ class DataProcessor:
                     "Candidate Field Value": "MISSING",
                 }
             )
+        return discrepancies
 
     def extract_discrepancy(self, df_merged, discrepancies, filters, key_column):
         for column_name, rules in self.rules_config["rules"].items():
@@ -586,7 +587,7 @@ class DataProcessor:
                                 df_merged["rule_violation"], "classification"
                             ] = rule.get("category", "None")
 
-                        self.final_discrepancy_list(
+                        discrepancies = self.final_discrepancy_list(
                             df_merged,
                             discrepancies,
                             key_column,
@@ -597,6 +598,7 @@ class DataProcessor:
                             col_baseline,
                             col_candidate,
                         )
+        return discrepancies
 
     def final_discrepancy_list(
         self,
@@ -623,6 +625,7 @@ class DataProcessor:
                     "Candidate Field Value": row[col_candidate],
                 }
             )
+        return discrepancies
 
     def get_arrays(
         self,
@@ -633,8 +636,7 @@ class DataProcessor:
         min_arrays,
         sub_columns,
         array_rule_key,
-        array_rules,
-    ):
+        array_rules,):
         for rule in array_rules:
             rule_number = rule.get("Rule Number", "N/A")
             rule_type = rule.get("type", "Unknown")
@@ -799,7 +801,7 @@ class DataProcessor:
                             self._extracted_discrepancy_classification(
                                 rule, df_merged, min_arrays, max_arrays
                             )
-                        self.discrepancy_list(
+                        discrepancies = self.discrepancy_list(
                             df_merged,
                             discrepancies,
                             key_column,
@@ -810,6 +812,8 @@ class DataProcessor:
                             base_val,
                             cand_val,
                         )
+        return discrepancies
+    
 
     def discrepancy_list(
         self,
@@ -836,6 +840,7 @@ class DataProcessor:
                     "Candidate Field Value": cand_val,
                 }
             )
+        return discrepancies
 
     def _extracted_discrepancy_classification(self, rule, df_merged, arg2, arg3):
         df_merged.loc[df_merged["rule_violation"] <= arg2, "classification"] = rule.get(
