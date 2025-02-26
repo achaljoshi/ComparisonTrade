@@ -298,13 +298,13 @@ def get_rules_sidebar():
 
             # Handle valid values (dropdown)
             valid_values = rule.get("valid_values", [])
-            prev_value = selected_filters[column_name][rule_number].get("valid_value", valid_values[0] if valid_values else None)
+            prev_value_valid_value = selected_filters[column_name][rule_number].get("valid_value", valid_values[0] if valid_values else None)
 
             if valid_values:
                 new_value = st.sidebar.selectbox(
                     f"Valid Values for {rule_number} ({rule_type})",
                     valid_values,
-                    index=valid_values.index(prev_value) if prev_value in valid_values else 0,
+                    index=valid_values.index(prev_value_valid_value) if prev_value_valid_value in valid_values else 0,
                     key=f"{unique_key}_valid_value"
                 )
                 selected_filters[column_name][rule_number]["valid_value"] = new_value
@@ -316,11 +316,11 @@ def get_rules_sidebar():
                 if min_value is not None and default_value is not None and default_value < min_value:
                     default_value = min_value
 
-                prev_value = selected_filters[column_name][rule_number].get("numerical_value", default_value)
+                prev_value_valid_value = selected_filters[column_name][rule_number].get("numerical_value", default_value)
 
                 new_value = st.sidebar.number_input(
                     f"Enter value for {rule_number} ({rule_type})",
-                    value=prev_value,
+                    value=prev_value_valid_value,
                     min_value=min_value,
                     max_value=max_value,
                     key=f"{unique_key}_numerical_value"
@@ -337,113 +337,6 @@ def get_rules_sidebar():
 get_rules_sidebar()
 
 # Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
-
-# Debugging Output
-#st.write("### Selected Filters Debug Info:")
-#st.json(st.session_state["selected_filters"])
-
-
-get_rules_sidebar()
-
-# Store the selected filters in session state
 st.session_state["selected_filters"] = selected_filters
 
 

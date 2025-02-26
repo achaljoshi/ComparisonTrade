@@ -1,0 +1,18 @@
+{
+    "rules": [
+        {
+            "type": "<Validation Type>",
+            "rulenumber": "<Unique Rule Identifier>",
+            "columns": ["<Applicable Fields>"],
+            "description": "<Explanation of the rule>",
+            "format": "<Applicable Format>",
+            "constraints": {"min": <Minimum Value>, "max": <Maximum Value>, "ignorecase": <yes or no>},
+            "classification": {"min": <classification1>, "max": "classification2", "min_max": "classification3", "other": "classification4"},
+            “nested_identifier": [“nested_identifier1", “nested_identifier2", “nested_identifier3“, “nested_identifier[N]”],
+            "relations": ["<Related Parameters>"],
+            "validvalues": ["<Allowed Values>"],
+            "defaultvalue": "<Default Value>",
+            "exclusions": ["<Conditions under which this rule is ignored>"]
+        }
+    ]
+}
