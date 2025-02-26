@@ -69,6 +69,37 @@ required_files = {
     "rules_config.json": "rules_config_path"
 }
 
+def apply_filter():
+    """Dynamically applies selected filters and updates the results in real-time."""
+
+    if "filtered_results" not in st.session_state or st.session_state["filtered_results"].empty:
+        st.warning("No results available for filtering. Please upload and compare files first.")
+        return
+
+    df = st.session_state["filtered_results"].copy()
+    selected_filters = st.session_state.get("selected_filters", {})
+
+    try:
+        for column, rules in selected_filters.items():
+            if column not in df.columns:  # ✅ Check if column exists in DataFrame
+                st.warning(f"Column `{column}` not found in dataset. Skipping filter.")
+                continue
+
+            for rule_number, rule_values in rules.items():
+                if "numerical_value" in rule_values:
+                    # ✅ Apply numerical filters only if the column exists
+                    df = df[df[column] >= rule_values["numerical_value"]]
+
+        # ✅ Store updated results
+        st.session_state["filtered_results"] = df
+        st.success("✅ Filters Applied Successfully!")
+        st.rerun()
+
+    except Exception as e:
+        st.error(f"❌ Error applying filters: {str(e)}")
+
+
+
 
 def file_upload():
     global f, e
@@ -266,75 +297,88 @@ def convert_to_numeric(value):
     return None  # If conversion fails, return None
 
 def get_rules_sidebar():
-    """Generates a Streamlit sidebar with dynamically populated rule filters."""
+    """Generates a Streamlit sidebar with dynamically populated rule filters for constraints."""
     selected_filters = st.session_state.get("selected_filters", {})
 
     for column_name, rules in rules_config.get("rules", {}).items():
-        for index, rule in enumerate(rules):  # Add index to ensure uniqueness
+        for index, rule in enumerate(rules):
             if not isinstance(rule, dict):
-                continue  # Skip invalid rules
+                continue
 
             rule_number = rule.get("Rule Number", "Unknown Rule")
             rule_type = rule.get("type", "Unknown Type")
-            rule_columns = ", ".join(rule.get("columns", [])) if rule.get("columns") else "N/A"
 
-            st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
-            st.sidebar.write(f"📝 Columns: {rule_columns}")
-            st.sidebar.write(f"📄 Description: {rule.get('description', 'No description available')}")
+            st.sidebar.subheader(f"{column_name} - {rule_type}")
 
-            # Ensure dictionary structure exists in session state
             if column_name not in selected_filters:
                 selected_filters[column_name] = {}
             if rule_number not in selected_filters[column_name]:
                 selected_filters[column_name][rule_number] = {}
 
-            # Generate a unique key for each rule element
-            rule_id = f"{column_name}_{rule_number}"
-            unique_key = generate_unique_key(column_name, rule_number, rule_type, rule_id, index)
+            # Only apply constraints
+            min_value = rule.get("constraints", {}).get("min", None)
+            max_value = rule.get("constraints", {}).get("max", None)
+            default_value = min_value if min_value is not None else 0
 
-            # Handle constraints (min/max values)
-            min_value = convert_to_numeric(rule.get("constraints", {}).get("min", None))
-            max_value = convert_to_numeric(rule.get("constraints", {}).get("max", None))
+            new_value = st.sidebar.number_input(
+                f"{column_name} - {rule_type}",
+                value=selected_filters[column_name][rule_number].get("numerical_value", default_value),
+                min_value=min_value,
+                max_value=max_value,
+                key=f"{column_name}_{rule_number}_value",
+                on_change=lambda: apply_filter()  # ✅ Trigger filter function
+            )
 
-            # Handle valid values (dropdown)
-            valid_values = rule.get("valid_values", [])
-            prev_value_valid_value = selected_filters[column_name][rule_number].get("valid_value", valid_values[0] if valid_values else None)
+            selected_filters[column_name][rule_number]["numerical_value"] = new_value
 
-            if valid_values:
-                new_value = st.sidebar.selectbox(
-                    f"Valid Values for {rule_number} ({rule_type})",
-                    valid_values,
-                    index=valid_values.index(prev_value_valid_value) if prev_value_valid_value in valid_values else 0,
-                    key=f"{unique_key}_valid_value"
-                )
-                selected_filters[column_name][rule_number]["valid_value"] = new_value
-            else:
-                # If no valid values, fallback to default/numeric input
-                default_value = convert_to_numeric(rule.get("default_value", min_value if min_value is not None else 0))
+    st.session_state["selected_filters"] = selected_filters
 
-                # Ensure default_value is at least min_value
-                if min_value is not None and default_value is not None and default_value < min_value:
-                    default_value = min_value
+def get_rules_sidebar():
+    """Generates a Streamlit sidebar with dynamically populated rule filters for constraints."""
+    selected_filters = st.session_state.get("selected_filters", {})
 
-                prev_value_valid_value = selected_filters[column_name][rule_number].get("numerical_value", default_value)
+    for column_name, rules in rules_config.get("rules", {}).items():
+        for index, rule in enumerate(rules):  # Iterate with index to ensure uniqueness
+            if not isinstance(rule, dict):
+                continue
 
-                new_value = st.sidebar.number_input(
-                    f"Enter value for {rule_number} ({rule_type})",
-                    value=prev_value_valid_value,
-                    min_value=min_value,
-                    max_value=max_value,
-                    key=f"{unique_key}_numerical_value"
-                )
-                selected_filters[column_name][rule_number]["numerical_value"] = new_value
+            rule_number = rule.get("Rule Number", "Unknown Rule")
+            rule_type = rule.get("type", "Unknown Type")
 
-            # Handle relations (dependencies) - FIXED
-            if "relations" in rule:
-                required_fields = ", ".join(
-                    [str(rel) if isinstance(rel, str) else str(rel.get("required_fields", "")) for rel in rule["relations"]]
-                )
-                st.sidebar.warning(f"⚠️ This rule depends on: {required_fields}")
+            st.sidebar.subheader(f"{column_name} - {rule_type}")
+
+            # Ensure structure exists in session state
+            if column_name not in selected_filters:
+                selected_filters[column_name] = {}
+            if rule_number not in selected_filters[column_name]:
+                selected_filters[column_name][rule_number] = {}
+
+            # Only process constraints
+            min_value = rule.get("constraints", {}).get("min", None)
+            max_value = rule.get("constraints", {}).get("max", None)
+            default_value = min_value if min_value is not None else 0
+
+            # ✅ Ensure the key is **always unique**
+            unique_key = f"{column_name}_{rule_number}_{index}_value"
+
+            new_value = st.sidebar.number_input(
+                f"{column_name} - {rule_type}",
+                value=selected_filters[column_name][rule_number].get("numerical_value", default_value),
+                min_value=min_value,
+                max_value=max_value,
+                key=unique_key,  # 🔹 Unique key per filter element
+                on_change=apply_filter  # ✅ Trigger filter function
+            )
+
+            # Store selected filter value
+            selected_filters[column_name][rule_number]["numerical_value"] = new_value
+
+    # Store updated filters
+    st.session_state["selected_filters"] = selected_filters
+
 
 get_rules_sidebar()
+
 
 # Store selected filters in session state
 st.session_state["selected_filters"] = selected_filters
@@ -347,39 +391,6 @@ if reset_filter_clicked := st.sidebar.button(
 ):
     st.session_state["selected_filters"] = {}
     st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
-    st.rerun()
-
-
-def apply_filter():
-    global processor, file_type, baseline_bytes, candidate_bytes, df_baseline, df_candidate
-    # ✅ Initialize Processor
-    processor = DataProcessor(
-        st.session_state["directory_config_path"],
-        st.session_state["job_response_path"],
-        st.session_state["rules_config_path"]
-    )
-    file_type = st.session_state["file_type"]
-    # ✅ Convert uploaded files to `BytesIO` for efficient processing
-    baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
-    candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
-    # ✅ Reset file pointer before reading
-    baseline_bytes.seek(0)
-    candidate_bytes.seek(0)
-    # ✅ Read files using `read_file()`
-    df_baseline = processor.read_file(baseline_bytes, file_type)
-    df_candidate = processor.read_file(candidate_bytes, file_type)
-    # ✅ Ensure files are not empty
-    if df_baseline.empty or df_candidate.empty:
-        st.error("One of the uploaded files is empty. Please check your data.")
-        st.stop()
-    # ✅ Apply filters dynamically
-    updated_results = processor.compare_files(
-        df_baseline, df_candidate, file_type, st.session_state["selected_filters"]
-    )
-    # ✅ Store updated results in session state
-    st.session_state["results"] = updated_results
-    st.session_state["filtered_results"] = updated_results
-    st.success("✅ Filters Applied Successfully!")
     st.rerun()
 
 
