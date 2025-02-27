@@ -12,6 +12,7 @@ from pathlib import Path
 import logging
 import hashlib
 import uuid
+import re
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -54,6 +55,12 @@ required_files = {
     "job_creation_response.json": "job_response_path",
     "rules_config.json": "rules_config_path"
 }
+
+def extract_numeric(value):
+    if isinstance(value, str):
+        match = re.search(r"\b\d+\b", value)  # Extract first number
+        return float(match.group()) if match else None
+    return value
 
 
 # ✅ Step 1: Upload Configuration Files
@@ -211,7 +218,7 @@ if st.session_state["screen"] == "file_selection":
     
             # ✅ Run Comparison
             results = processor.compare_files(df_baseline, df_candidate, file_type)
-            st.success("✅ Comparison Completed! Discrepancy report generated.")
+            st.success("✅Apply Comparison Completed! Discrepancy report generated.")
     
             # ✅ Store results in session state
             st.session_state["results"] = results
@@ -223,13 +230,15 @@ if st.session_state["screen"] == "file_selection":
             st.error(f"Error processing files: {str(e)}")
 
 # ✅ Load `rules_config.json`
-rules_config_path = st.session_state.get("rules_config_path")
+rules_config_path = st.session_state.get("rules_config_path", None)
 
 if rules_config_path and os.path.exists(rules_config_path):
     with open(rules_config_path, "r") as f:
         rules_config = json.load(f)
+        st.session_state["rules_config"] = rules_config  # ✅ Store in session state
+        print("\n✅ [DEBUG] Reloaded `rules_config.json` from disk\n")
 else:
-    rules_config = {"rules": []}
+    print("🚨 [ERROR] `rules_config.json` file not found or path is incorrect!")
 
 # ✅ Sidebar: Dynamic Filters
 st.sidebar.header("🔍 Filter Rules")
@@ -255,26 +264,25 @@ for category, rules in rules_config.get("rules", {}).items():
             if key == "constraints" and isinstance(value, dict):
                 for sub_key, sub_value in value.items():
                     input_key = f"{rule_key_prefix}_{key}_{sub_key}"
-                    prev_value = selected_filters[rule_key_prefix].get(input_key, sub_value)
+
+                    # ✅ Load previous value from session state if available
+                    prev_value = st.session_state.get(input_key, sub_value)
+
+                    # ✅ Number input for dynamic constraints update
                     new_value = st.sidebar.number_input(
                         f"{sub_key.capitalize()} for {rule_number}", value=prev_value, key=input_key
                     )
-                    selected_filters[rule_key_prefix][input_key] = new_value
-            # elif key == "valid_values" and isinstance(value, list) and value:
-            #     input_key = f"{rule_key_prefix}_{key}"
-            #     prev_value = selected_filters[rule_key_prefix].get(input_key, value[0])
-            #     new_value = st.sidebar.selectbox(
-            #         f"Valid Values for {rule_number}", value, index=value.index(prev_value), key=input_key
-            #     )
-            #     selected_filters[rule_key_prefix][input_key] = new_value
-            # elif key == "sub_columns" and isinstance(value, list):
-            #     for sub_column in value:
-            #         input_key = f"{rule_key_prefix}_{sub_column}"
-            #         prev_value = selected_filters[rule_key_prefix].get(input_key, 0)
-            #         new_value = st.sidebar.number_input(
-            #             f"{sub_column.capitalize()} for {rule_number}", value=prev_value, key=input_key
-            #         )
-            #         selected_filters[rule_key_prefix][input_key] = new_value
+
+                    # ✅ Update session state immediately
+                    # ✅ Update only if the value is different
+                    if input_key not in st.session_state:
+                        st.session_state[input_key] = new_value
+                    elif st.session_state[input_key] != new_value:
+                        st.session_state[input_key] = new_value
+
+                    # ✅ Ensure the updated values are stored in `rules_config`
+                    rule["constraints"][sub_key] = new_value
+
             elif isinstance(value, (int, float)):
                 input_key = f"{rule_key_prefix}_{key}"
                 prev_value = selected_filters[rule_key_prefix].get(input_key, value)
@@ -299,66 +307,129 @@ if reset_filter_clicked:
 
 # ✅ Apply Filters
 if apply_filter_clicked and "results" in st.session_state:
-    processor = DataProcessor(
-                st.session_state["directory_config_path"],
-                st.session_state["job_response_path"],
-                st.session_state["rules_config_path"]
-            )
-    
-    file_type = st.session_state["file_type"]
-    def detect_file_type(file):
-        filename = file.name.lower()
-        if filename.endswith(".xlsx") or filename.endswith(".xls") and file_type == "Excel":
-            return "Excel"
-        elif filename.endswith(".txt") and file_type == "DD":
-            return "DD"
-        elif filename.endswith(".txt") and file_type == "Text":
-            return "TEXT"
-        elif filename.endswith(".csv") and file_type == "Text":
-            return "CSV"
-        elif filename.endswith(".json") and file_type == "Text":
-            return "JSON"
-        elif filename.endswith(".log") and file_type == "Text":
-            return "LOG"
-        else:
-            raise ValueError("Unsupported file format.")
 
-    file_type = detect_file_type(uploaded_file_baseline)
-    st.session_state["file_type"] = file_type  # ✅ Ensure file type is set in session
+    print("\n🔍 [DEBUG] Apply Filter Clicked")  # ✅ Debugging Start
 
-    # ✅ Convert uploaded files to `BytesIO`
-    baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
-    candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
+    # ✅ Get existing discrepancy data
+    df = st.session_state.get("results", pd.DataFrame()).copy()
 
-    # ✅ Reset file pointer before reading (important for Streamlit uploads)
-    baseline_bytes.seek(0)
-    candidate_bytes.seek(0)
+    if not df.empty:
+        print(f"🔹 [DEBUG] Initial DataFrame Rows: {len(df)}")  # ✅ Debugging Row Count
 
-    # ✅ Read files using `read_file()` from DataProcessor
-    df_baseline = processor.read_file(baseline_bytes, file_type)
-    df_candidate = processor.read_file(candidate_bytes, file_type)
 
-    # ✅ Debugging: Display sample data
-    st.write("✅ Uploaded files successfully converted to DataFrames.")
-    print("✅ Baseline DataFrame:\n", df_baseline.head())
-    print("✅ Candidate DataFrame:\n", df_candidate.head())
+        # ✅ Ensure numeric conversion for comparison
+        def extract_numeric(value):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return None
 
-    # ✅ Ensure files are not empty
-    if df_baseline.empty or df_candidate.empty:
-        st.error("One of the uploaded files is empty. Please check your data.")
-        st.stop()
 
-    # ✅ Run Comparison
-    updated_results = processor.compare_files(df_baseline, df_candidate, file_type)
-    st.success("✅ Comparison Completed! Discrepancy report generated.")
+        df["Baseline Field Value Numeric"] = df["Baseline Field Value"].apply(extract_numeric)
+        df["Candidate Field Value Numeric"] = df["Candidate Field Value"].apply(extract_numeric)
 
-    st.session_state["results"] = updated_results
-    st.session_state["filtered_results"] = updated_results
-    st.rerun()
+        # ✅ Compute absolute difference
+        df["Difference"] = abs(df["Baseline Field Value Numeric"] - df["Candidate Field Value Numeric"])
+        print("\n🔹 [DEBUG] Computed Difference Column Added\n",
+              df[["Baseline Field Value Numeric", "Candidate Field Value Numeric", "Difference"]].head())
+
+        # ✅ Load `rules_config` from session state
+        rules_config = st.session_state.get("rules_config", {})
+
+        # ✅ Ensure `rules_config` has the required structure
+        if "rules" in rules_config:
+            for category, rules in rules_config["rules"].items():
+                for rule in rules:
+                    rule_number = rule.get("rulenumber", "Unknown Rule")
+                    constraints = rule.get("constraints", {})
+                    rule_columns = rule.get("columns", [])  # ✅ Get target columns for this rule
+
+                    # ✅ Get updated min/max values from session state
+                    min_constraint = constraints.get("min", None)
+                    max_constraint = constraints.get("max", None)
+
+                    print(f"\n🔍 [DEBUG] Processing Rule: {rule_number}")
+                    print(f"🔹 Columns: {rule_columns}")
+                    print(f"🔹 Old Min: {constraints.get('min', None)}, New Min: {min_constraint}")
+                    print(f"🔹 Old Max: {constraints.get('max', None)}, New Max: {max_constraint}")
+
+                    # ✅ Apply filtering only for the specified columns in this rule
+                    for col in rule_columns:
+                        if min_constraint is not None:
+                            print(f"✅ [DEBUG] Removing rows where {col} Difference < {min_constraint}")
+                            df = df[~((df["Column Name"] == col) & (df["Difference"] < min_constraint))]
+
+                        if max_constraint is not None:
+                            print(f"✅ [DEBUG] Removing rows where {col} Difference > {max_constraint}")
+                            df = df[~((df["Column Name"] == col) & (df["Difference"] > max_constraint))]
+
+            # ✅ Store updated rules_config back in session state
+            st.session_state["rules_config"] = rules_config
+
+            # ✅ Save changes back to `rules_config.json`
+            rules_config_path = st.session_state.get("rules_config_path", None)
+            if rules_config_path:
+                with open(rules_config_path, "w") as f:
+                    json.dump(rules_config, f, indent=4)
+
+                print(f"✅ [DEBUG] Updated rules_config.json saved at: {rules_config_path}")
+
+                # ✅ Read back to confirm changes
+                with open(rules_config_path, "r") as f:
+                    updated_config = json.load(f)
+                    print("\n✅ [DEBUG] Confirming Updated rules_config.json Content:")
+                    print(json.dumps(updated_config, indent=4))  # ✅ Print formatted JSON
+
+        # ✅ Apply updated filters dynamically
+        filtered_df = df.copy()
+
+        for category, rules in rules_config["rules"].items():
+            for rule in rules:
+                rule_number = rule.get("rulenumber", "Unknown Rule")
+                constraints = rule.get("constraints", {})
+                rule_columns = rule.get("columns", [])  # ✅ Get target columns for this rule
+
+                # ✅ Get updated min/max values from session state
+                min_constraint = constraints.get("min", None)
+                max_constraint = constraints.get("max", None)
+
+                print(f"\n🔍 [DEBUG] Processing Rule: {rule_number}")
+                print(f"🔹 Columns: {rule_columns}")
+                print(f"🔹 Old Min: {constraints.get('min', None)}, New Min: {min_constraint}")
+                print(f"🔹 Old Max: {constraints.get('max', None)}, New Max: {max_constraint}")
+
+                # ✅ Apply filtering only for the specified columns in this rule
+                for col in rule_columns:
+                    if min_constraint is not None:
+                        print(f"✅ [DEBUG] Removing rows where {col} Difference < {min_constraint}")
+                        df = df[~((df["Column Name"] == col) & (df["Difference"] < min_constraint))]
+
+                    if max_constraint is not None:
+                        print(f"✅ [DEBUG] Removing rows where {col} Difference > {max_constraint}")
+                        df = df[~((df["Column Name"] == col) & (df["Difference"] > max_constraint))]
+
+        # ✅ Store filtered results in session state
+        st.session_state["filtered_results"] = df
+
+        # ✅ Debugging Output
+        print("\n✅ [DEBUG] Updated Filtered Data:")
+        print(filtered_df.head())  # ✅ Show First Few Rows
+
+        print(f"\n✅ [DEBUG] Final Filtered Row Count: {len(filtered_df)}")
+
+        # ✅ Refresh UI to reflect changes
+        st.rerun()
+
+# ✅ Display Filtered Results
+
 
 
 # **📤 Export Button**
 filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
+
+if not filtered_results.empty:
+    st.header("📊 Updated Discrepancy Analysis")
+    st.dataframe(filtered_results)
 job_response_path = st.session_state["job_response_path"]
 export_format = "CSV"  # Default file format
 
