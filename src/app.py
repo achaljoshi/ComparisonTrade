@@ -55,6 +55,34 @@ required_files = {
     "rules_config.json": "rules_config_path"
 }
 
+def apply_filter():
+    """Dynamically applies selected filters and updates the results in real-time."""
+
+    if "filtered_results" not in st.session_state or st.session_state["filtered_results"].empty:
+        st.warning("No results available for filtering. Please upload and compare files first.")
+        return
+
+    df = st.session_state["filtered_results"].copy()
+    selected_filters = st.session_state.get("selected_filters", {})
+
+    try:
+        for column, rules in selected_filters.items():
+            if column not in df.columns:  # ✅ Check if column exists in DataFrame
+                st.warning(f"Column `{column}` not found in dataset. Skipping filter.")
+                continue
+
+            for rule_number, rule_values in rules.items():
+                if "numerical_value" in rule_values:
+                    # ✅ Apply numerical filters only if the column exists
+                    df = df[df[column] >= rule_values["numerical_value"]]
+
+        # ✅ Store updated results
+        st.session_state["filtered_results"] = df
+        st.success("✅ Filters Applied Successfully!")
+        st.rerun()
+
+    except Exception as e:
+        st.error(f"❌ Error applying filters: {str(e)}")
 
 # ✅ Step 1: Upload Configuration Files
 if st.session_state["screen"] == "upload_config":
