@@ -296,42 +296,6 @@ def convert_to_numeric(value):
         return float(value) if "." in value else int(value)
     return None  # If conversion fails, return None
 
-def get_rules_sidebar():
-    """Generates a Streamlit sidebar with dynamically populated rule filters for constraints."""
-    selected_filters = st.session_state.get("selected_filters", {})
-
-    for column_name, rules in rules_config.get("rules", {}).items():
-        for index, rule in enumerate(rules):
-            if not isinstance(rule, dict):
-                continue
-
-            rule_number = rule.get("Rule Number", "Unknown Rule")
-            rule_type = rule.get("type", "Unknown Type")
-
-            st.sidebar.subheader(f"{column_name} - {rule_type}")
-
-            if column_name not in selected_filters:
-                selected_filters[column_name] = {}
-            if rule_number not in selected_filters[column_name]:
-                selected_filters[column_name][rule_number] = {}
-
-            # Only apply constraints
-            min_value = rule.get("constraints", {}).get("min", None)
-            max_value = rule.get("constraints", {}).get("max", None)
-            default_value = min_value if min_value is not None else 0
-
-            new_value = st.sidebar.number_input(
-                f"{column_name} - {rule_type}",
-                value=selected_filters[column_name][rule_number].get("numerical_value", default_value),
-                min_value=min_value,
-                max_value=max_value,
-                key=f"{column_name}_{rule_number}_value",
-                on_change=lambda: apply_filter()  # ✅ Trigger filter function
-            )
-
-            selected_filters[column_name][rule_number]["numerical_value"] = new_value
-
-    st.session_state["selected_filters"] = selected_filters
 
 def get_rules_sidebar():
     """Generates a Streamlit sidebar with dynamically populated rule filters for constraints."""
@@ -342,7 +306,7 @@ def get_rules_sidebar():
             if not isinstance(rule, dict):
                 continue
 
-            rule_number = rule.get("Rule Number", "Unknown Rule")
+            rule_number = rule.get("rulenumber", "Unknown Rule")
             rule_type = rule.get("type", "Unknown Type")
 
             st.sidebar.subheader(f"{column_name} - {rule_type}")
@@ -474,9 +438,9 @@ def get_key_performance():
     global count
     st.header("📊 Key Performance Indicators")
     # ✅ Ensure consistent capitalization in category column
-    filtered_results["category"] = filtered_results["category"].str.upper()
+    filtered_results["classification"] = filtered_results["classification"].str.upper()
     # ✅ Count each unique category dynamically
-    category_counts = filtered_results["category"].value_counts().to_dict()
+    category_counts = filtered_results["classification"].value_counts().to_dict()
     # ✅ Identify Missing Rows
     missing_baseline_count = (filtered_results["Rule Type"] == "Missing in Baseline").sum()
     missing_candidate_count = (filtered_results["Rule Type"] == "Missing in Candidate").sum()
@@ -495,19 +459,19 @@ def get_key_performance():
     i += 1
     kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Candidate", missing_candidate_count)
     # ✅ Extract unique categories dynamically
-    unique_categories = filtered_results["category"].unique()
+    unique_categories = filtered_results["classification"].unique()
     # ✅ Generate distinct colors dynamically using Plotly's color palette
     color_palette = plotly.colors.qualitative.Set1  # Choose a color set
     color_map = {category: color_palette[i % len(color_palette)] for i, category in enumerate(unique_categories)}
     # ✅ Count discrepancies per column and category
-    discrepancy_counts = filtered_results.groupby(["Column Name", "category"]).size().reset_index(name="Count")
+    discrepancy_counts = filtered_results.groupby(["Column Name", "classification"]).size().reset_index(name="Count")
     # ✅ Bar Chart: Count of Discrepancies by Column
     st.header("📊 Discrepancy Analysis")
     fig = px.bar(
         discrepancy_counts,
         x="Column Name",
         y="Count",
-        color="category",
+        color="classification",
         title="Discrepancies by Column",
         barmode="group",
         color_discrete_map=color_map  # ✅ Now dynamically generated
@@ -515,7 +479,7 @@ def get_key_performance():
     st.plotly_chart(fig, use_container_width=True)
     # ✅ **Pie Chart: category Distribution**
     st.header("Discrepancy Distribution")
-    pie_chart = px.pie(filtered_results, names="category", title="Proportion of Discrepancy Types", hole=0.4)
+    pie_chart = px.pie(filtered_results, names="classification", title="Proportion of Discrepancy Types", hole=0.4)
     st.plotly_chart(pie_chart, use_container_width=True)
     # ✅ **Filtered Data Table Based on Selected Column**
     st.header("Discrepancy Details")

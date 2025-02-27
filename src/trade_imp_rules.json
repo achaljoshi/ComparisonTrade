@@ -4,7 +4,7 @@
     "tradeTime": [
         {
             "type": "Date check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "tradeTime"
             ],
@@ -13,7 +13,7 @@
         },
         {
             "type": "String check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "tradeTime"
             ],
@@ -22,7 +22,7 @@
         },
         {
             "type": "Format check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "tradeTime"
             ],
@@ -33,7 +33,7 @@
     "orderBookId": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "orderBookId"
             ],
@@ -45,7 +45,7 @@
         },
         {
             "type": "Existence check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "orderBookId"
             ],
@@ -58,7 +58,7 @@
     "userId": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "userId"
             ],
@@ -70,7 +70,7 @@
         },
         {
             "type": "Uniqueness check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "userId"
             ],
@@ -81,7 +81,7 @@
         },
         {
             "type": "Existence check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "userId"
             ],
@@ -94,7 +94,7 @@
     "participantId": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "participantId"
             ],
@@ -106,7 +106,7 @@
         },
         {
             "type": "Uniqueness check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "participantId"
             ],
@@ -117,7 +117,7 @@
         },
         {
             "type": "Existence check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "participantId"
             ],
@@ -130,7 +130,7 @@
     "orderId": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "orderId"
             ],
@@ -142,7 +142,7 @@
         },
         {
             "type": "Uniqueness check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "orderId"
             ],
@@ -153,7 +153,7 @@
     "quoteMessageId": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "quoteMessageId"
             ],
@@ -165,7 +165,7 @@
         },
         {
             "type": "Existence check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "quoteMessageId"
             ],
@@ -178,16 +178,17 @@
     "matchId": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "matchId"
             ],
             "format_type":"Object",
-            "sub_columns": [
+            "nested_identifier": [
                 "matchGroupId",
                 "notUsed",
                 "combinationMatchId"
             ],
+            "classification": {"min": "classification1", "max": "classification2", "min_max": "classification3", "other": "classification4"},
             "description": "The matchGroupId must be a monotonically increasing number per partition, assigned to an execution event.",
             "constraints": {
                 "min": 0
@@ -197,7 +198,7 @@
     "orderPrice": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "orderPrice"
             ],
@@ -209,7 +210,7 @@
         },
         {
             "type": "Dependency check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "orderPrice"
             ],
@@ -223,7 +224,7 @@
         },
         {
             "type": "Dependency check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "orderPrice"
             ],
@@ -239,7 +240,7 @@
     "tradePrice": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "tradePrice"
             ],
@@ -251,7 +252,7 @@
         },
         {
             "type": "Dependency check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "tradePrice"
             ],
@@ -265,7 +266,7 @@
     "averagePrice": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "averagePrice"
             ],
@@ -277,7 +278,7 @@
         },
         {
             "type": "Format check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "averagePrice"
             ],
@@ -288,7 +289,7 @@
     "quantity": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "orderQuantity",
                 "tradedQuantity"
@@ -301,7 +302,7 @@
         },
         {
             "type": "Numerical check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "leavesQuantity"
             ],
@@ -313,7 +314,7 @@
         },
         {
             "type": "Relation check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "orderQuantity",
                 "leavesQuantity"
@@ -325,7 +326,7 @@
         },
         {
             "type": "Update check",
-            "Rule Number": "4",
+            "rulenumber": "4",
             "columns": [
                 "orderQuantity"
             ],
@@ -338,7 +339,7 @@
     "side": [
         {
             "type": "Value check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "side"
             ],
@@ -351,7 +352,7 @@
         },
         {
             "type": "Default value check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "side"
             ],
@@ -362,7 +363,7 @@
     "dealSource": [
         {
             "type": "Valid Values Check",
-            "Rule Number": "DS001",
+            "rulenumber": "DS001",
             "columns": [
                 "dealSource"
             ],
@@ -375,7 +376,7 @@
         },
         {
             "type": "Data Type Check",
-            "Rule Number": "DS002",
+            "rulenumber": "DS002",
             "columns": [
                 "dealSource"
             ],
@@ -389,7 +390,7 @@
     "tradeType": [
         {
             "type": "Value check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "tradeType"
             ],
@@ -405,7 +406,7 @@
         },
         {
             "type": "Range check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "tradeType"
             ],
@@ -418,7 +419,7 @@
     "passiveAggressive": [
         {
             "type": "String check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "orderStatus"
             ],
@@ -433,7 +434,7 @@
         },
         {
             "type": "String check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "changeReason"
             ],
@@ -448,7 +449,7 @@
         },
         {
             "type": "Numerical check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "orderQuantity"
             ],
@@ -459,7 +460,7 @@
         },
         {
             "type": "Numerical check",
-            "Rule Number": "4",
+            "rulenumber": "4",
             "columns": [
                 "leavesQuantity"
             ],
@@ -470,7 +471,7 @@
         },
         {
             "type": "Numerical check",
-            "Rule Number": "5",
+            "rulenumber": "5",
             "columns": [
                 "price"
             ],
@@ -483,7 +484,7 @@
     "accountId": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "accountId"
             ],
@@ -495,7 +496,7 @@
         },
         {
             "type": "Uniqueness check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "accountId"
             ],
@@ -506,7 +507,7 @@
         },
         {
             "type": "Existence check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "accountId"
             ],
@@ -519,7 +520,7 @@
     "exchangeInfo": [
         {
             "type": "String check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "exchangeInfo"
             ],
@@ -528,7 +529,7 @@
         },
         {
             "type": "Dependency check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "exchangeInfo"
             ],
@@ -541,7 +542,7 @@
     "customerInfo": [
         {
             "type": "String check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "participantName"
             ],
@@ -551,12 +552,12 @@
             "relations": [],
             "valid_values": [],
             "default_value": "",
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         },
         {
             "type": "Boolean check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "active"
             ],
@@ -569,12 +570,12 @@
                 "false"
             ],
             "default_value": "",
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         },
         {
             "type": "String check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "clearingHouseId"
             ],
@@ -584,12 +585,12 @@
             "relations": [],
             "valid_values": [],
             "default_value": "",
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         },
         {
             "type": "String check",
-            "Rule Number": "4",
+            "rulenumber": "4",
             "columns": [
                 "organisationNumber"
             ],
@@ -599,12 +600,12 @@
             "relations": [],
             "valid_values": [],
             "default_value": "",
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         },
         {
             "type": "List check",
-            "Rule Number": "5",
+            "rulenumber": "5",
             "columns": [
                 "clearingParticipants"
             ],
@@ -614,14 +615,14 @@
             "relations": [],
             "valid_values": [],
             "default_value": "",
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         }
     ],
     "yieldOrPrice": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "yieldOrPrice"
             ],
@@ -633,7 +634,7 @@
         },
         {
             "type": "Format check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "yieldOrPrice"
             ],
@@ -642,7 +643,7 @@
         },
         {
             "type": "Dependency check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "yieldOrPrice"
             ],
@@ -656,7 +657,7 @@
     "accruedInterest": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "couponInterest"
             ],
@@ -668,7 +669,7 @@
         },
         {
             "type": "Date check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "datedDate"
             ],
@@ -677,7 +678,7 @@
         },
         {
             "type": "Value check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "dayCountConvention"
             ],
@@ -699,7 +700,7 @@
     "giveUpParticipant": [
         {
             "type": "String check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "giveUpParticipant"
             ],
@@ -708,7 +709,7 @@
         },
         {
             "type": "Valid values check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "giveUpParticipant"
             ],
@@ -730,7 +731,7 @@
     "originalTrade": [
         {
             "type": "String check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "updatedTimestamp"
             ],
@@ -740,12 +741,12 @@
             "relations": [],
             "valid_values": [],
             "default_value": null,
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         },
         {
             "type": "Value check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "reason"
             ],
@@ -763,12 +764,12 @@
                 "7"
             ],
             "default_value": null,
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         },
         {
             "type": "Value check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "trendIndicator"
             ],
@@ -782,12 +783,12 @@
                 "<null>"
             ],
             "default_value": null,
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         },
         {
             "type": "Numerical check",
-            "Rule Number": "4",
+            "rulenumber": "4",
             "columns": [
                 "extendedLastPrice"
             ],
@@ -798,14 +799,14 @@
             "relations": [],
             "valid_values": [],
             "default_value": null,
-            "tolerance": {},
+            "classification": {},
             "exclusions": []
         }
     ],
     "tradeReportCode": [
         {
             "type": "Byte check",
-            "Rule Number": "TRC-001",
+            "rulenumber": "TRC-001",
             "columns": [
                 "tradeReportCode"
             ],
@@ -817,7 +818,7 @@
         },
         {
             "type": "Applicability check",
-            "Rule Number": "TRC-002",
+            "rulenumber": "TRC-002",
             "columns": [
                 "tradeReportCode"
             ],
@@ -830,7 +831,7 @@
     "reportTime": [
         {
             "type": "Date check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "reportTime"
             ],
@@ -839,7 +840,7 @@
         },
         {
             "type": "Dependency check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "reportTime"
             ],
@@ -852,7 +853,7 @@
     "extendedPrice": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "extendedLastPrice"
             ],
@@ -864,7 +865,7 @@
         },
         {
             "type": "Format check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "extendedLastPrice"
             ],
@@ -875,7 +876,7 @@
     "shortSellQuantity": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "quantity"
             ],
@@ -887,7 +888,7 @@
         },
         {
             "type": "Numerical check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "quantity"
             ],
@@ -902,7 +903,7 @@
     "tradeSlipNumber": [
         {
             "type": "Format check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "tradeSlipNumber"
             ],
@@ -911,7 +912,7 @@
         },
         {
             "type": "Range check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "tradeSlipNumber"
             ],
@@ -923,7 +924,7 @@
         },
         {
             "type": "Date check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "tradeSlipNumber"
             ],
@@ -936,7 +937,7 @@
     "nationalBidPriceSnapshot": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "nationalBidPriceSnapshot"
             ],
@@ -950,7 +951,7 @@
     "nationalOfferPriceSnapshot": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "nationalOfferPriceSnapshot"
             ],
@@ -962,7 +963,7 @@
         },
         {
             "type": "Date check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "timestamp"
             ],
@@ -971,7 +972,7 @@
         },
         {
             "type": "Numerical check",
-            "Rule Number": "3",
+            "rulenumber": "3",
             "columns": [
                 "orderBookId"
             ],
@@ -983,7 +984,7 @@
         },
         {
             "type": "Boolean check",
-            "Rule Number": "4",
+            "rulenumber": "4",
             "columns": [
                 "priceLimits"
             ],
@@ -995,7 +996,7 @@
         },
         {
             "type": "Boolean check",
-            "Rule Number": "5",
+            "rulenumber": "5",
             "columns": [
                 "dynamic"
             ],
@@ -1007,7 +1008,7 @@
         },
         {
             "type": "Numerical check",
-            "Rule Number": "6",
+            "rulenumber": "6",
             "columns": [
                 "referencePrice"
             ],
@@ -1021,7 +1022,7 @@
     "tradeCondition": [
         {
             "type": "Range check",
-            "Rule Number": "TC-001",
+            "rulenumber": "TC-001",
             "columns": [
                 "tradeCondition"
             ],
@@ -1035,7 +1036,7 @@
     "counterOrderCapacity": [
         {
             "type": "Valid Values Check",
-            "Rule Number": "1",
+            "rulenumber": "1",
             "columns": [
                 "counterOrderCapacity"
             ],
@@ -1051,7 +1052,7 @@
         },
         {
             "type": "Default Value Check",
-            "Rule Number": "2",
+            "rulenumber": "2",
             "columns": [
                 "counterOrderCapacity"
             ],
