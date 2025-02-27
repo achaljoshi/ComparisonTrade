@@ -308,14 +308,13 @@ if reset_filter_clicked:
 # ✅ Apply Filters
 if apply_filter_clicked and "results" in st.session_state:
 
-    print("\n🔍 [DEBUG] Apply Filter Clicked")  # ✅ Debugging Start
+    print("\n🔍 [DEBUG] Apply Filter Clicked")
 
     # ✅ Get existing discrepancy data
     df = st.session_state.get("results", pd.DataFrame()).copy()
 
     if not df.empty:
-        print(f"🔹 [DEBUG] Initial DataFrame Rows: {len(df)}")  # ✅ Debugging Row Count
-
+        print(f"🔹 [DEBUG] Initial DataFrame Rows: {len(df)}")
 
         # ✅ Ensure numeric conversion for comparison
         def extract_numeric(value):
@@ -323,7 +322,6 @@ if apply_filter_clicked and "results" in st.session_state:
                 return float(value)
             except (ValueError, TypeError):
                 return None
-
 
         df["Baseline Field Value Numeric"] = df["Baseline Field Value"].apply(extract_numeric)
         df["Candidate Field Value Numeric"] = df["Candidate Field Value"].apply(extract_numeric)
@@ -342,83 +340,39 @@ if apply_filter_clicked and "results" in st.session_state:
                 for rule in rules:
                     rule_number = rule.get("rulenumber", "Unknown Rule")
                     constraints = rule.get("constraints", {})
-                    rule_columns = rule.get("columns", [])  # ✅ Get target columns for this rule
+                    rule_columns = rule.get("columns", [])
+                    format_type = rule.get("format_type", "Simple")
 
-                    # ✅ Get updated min/max values from session state
                     min_constraint = constraints.get("min", None)
                     max_constraint = constraints.get("max", None)
 
-                    print(f"\n🔍 [DEBUG] Processing Rule: {rule_number}")
+                    print(f"\n🔍 [DEBUG] Processing Rule: {rule_number} ({format_type})")
                     print(f"🔹 Columns: {rule_columns}")
                     print(f"🔹 Old Min: {constraints.get('min', None)}, New Min: {min_constraint}")
                     print(f"🔹 Old Max: {constraints.get('max', None)}, New Max: {max_constraint}")
 
-                    # ✅ Apply filtering only for the specified columns in this rule
+                    # ✅ Apply filtering based on format type
                     for col in rule_columns:
-                        if min_constraint is not None:
-                            print(f"✅ [DEBUG] Removing rows where {col} Difference < {min_constraint}")
-                            df = df[~((df["Column Name"] == col) & (df["Difference"] < min_constraint))]
+                        if format_type == "Array":
+                            # ✅ Ensure column name pattern matching for arrays like `tickSizes[0].lowerLimit`
+                            df = df[~((df["Column Name"].str.contains(col, regex=False)) & (df["Difference"] < min_constraint))]
+                            df = df[~((df["Column Name"].str.contains(col, regex=False)) & (df["Difference"] > max_constraint))]
+                        else:
+                            if min_constraint is not None:
+                                df = df[~((df["Column Name"] == col) & (df["Difference"] < min_constraint))]
+                            if max_constraint is not None:
+                                df = df[~((df["Column Name"] == col) & (df["Difference"] > max_constraint))]
 
-                        if max_constraint is not None:
-                            print(f"✅ [DEBUG] Removing rows where {col} Difference > {max_constraint}")
-                            df = df[~((df["Column Name"] == col) & (df["Difference"] > max_constraint))]
-
-            # ✅ Store updated rules_config back in session state
-            st.session_state["rules_config"] = rules_config
-
-            # ✅ Save changes back to `rules_config.json`
-            rules_config_path = st.session_state.get("rules_config_path", None)
-            if rules_config_path:
-                with open(rules_config_path, "w") as f:
-                    json.dump(rules_config, f, indent=4)
-
-                print(f"✅ [DEBUG] Updated rules_config.json saved at: {rules_config_path}")
-
-                # ✅ Read back to confirm changes
-                with open(rules_config_path, "r") as f:
-                    updated_config = json.load(f)
-                    print("\n✅ [DEBUG] Confirming Updated rules_config.json Content:")
-                    print(json.dumps(updated_config, indent=4))  # ✅ Print formatted JSON
-
-        # ✅ Apply updated filters dynamically
-        filtered_df = df.copy()
-
-        for category, rules in rules_config["rules"].items():
-            for rule in rules:
-                rule_number = rule.get("rulenumber", "Unknown Rule")
-                constraints = rule.get("constraints", {})
-                rule_columns = rule.get("columns", [])  # ✅ Get target columns for this rule
-
-                # ✅ Get updated min/max values from session state
-                min_constraint = constraints.get("min", None)
-                max_constraint = constraints.get("max", None)
-
-                print(f"\n🔍 [DEBUG] Processing Rule: {rule_number}")
-                print(f"🔹 Columns: {rule_columns}")
-                print(f"🔹 Old Min: {constraints.get('min', None)}, New Min: {min_constraint}")
-                print(f"🔹 Old Max: {constraints.get('max', None)}, New Max: {max_constraint}")
-
-                # ✅ Apply filtering only for the specified columns in this rule
-                for col in rule_columns:
-                    if min_constraint is not None:
-                        print(f"✅ [DEBUG] Removing rows where {col} Difference < {min_constraint}")
-                        df = df[~((df["Column Name"] == col) & (df["Difference"] < min_constraint))]
-
-                    if max_constraint is not None:
-                        print(f"✅ [DEBUG] Removing rows where {col} Difference > {max_constraint}")
-                        df = df[~((df["Column Name"] == col) & (df["Difference"] > max_constraint))]
-
-        # ✅ Store filtered results in session state
+        # ✅ Store updated filtered results
         st.session_state["filtered_results"] = df
 
-        # ✅ Debugging Output
         print("\n✅ [DEBUG] Updated Filtered Data:")
-        print(filtered_df.head())  # ✅ Show First Few Rows
+        print(df.head())
+        print(f"\n✅ [DEBUG] Final Filtered Row Count: {len(df)}")
 
-        print(f"\n✅ [DEBUG] Final Filtered Row Count: {len(filtered_df)}")
-
-        # ✅ Refresh UI to reflect changes
+        # ✅ Refresh UI
         st.rerun()
+
 
 # ✅ Display Filtered Results
 
