@@ -237,7 +237,7 @@ selected_filters = st.session_state.get("selected_filters", {})
 
 for category, rules in rules_config.get("rules", {}).items():
     for rule in rules:
-        rule_number = rule.get("Rule Number", "Unknown Rule")
+        rule_number = rule.get("rulenumber", "Unknown Rule")
         rule_type = rule.get("type", "Unknown Type")
         rule_columns = ", ".join(rule.get("columns", []))
         rule_description = rule.get("description", "No Description")
@@ -425,10 +425,10 @@ if not filtered_results.empty:
     st.header("📊 Key Performance Indicators")
 
     # ✅ Ensure consistent capitalization in Category column
-    filtered_results["category"] = filtered_results["category"].str.upper()
+    filtered_results["Classification"] = filtered_results["Classification"].str.upper()
 
     # ✅ Count each unique category dynamically
-    category_counts = filtered_results["category"].value_counts().to_dict()
+    category_counts = filtered_results["Classification"].value_counts().to_dict()
 
 
     # ✅ Identify Missing Rows
@@ -454,19 +454,19 @@ if not filtered_results.empty:
     kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Candidate", missing_candidate_count)
 
     # ✅ Extract unique categories dynamically
-    unique_categories = filtered_results["category"].unique()
+    unique_categories = filtered_results["Classification"].unique()
     # ✅ Generate distinct colors dynamically using Plotly's color palette
     color_palette = plotly.colors.qualitative.Set1  # Choose a color set
     color_map = {category: color_palette[i % len(color_palette)] for i, category in enumerate(unique_categories)}
     # ✅ Count discrepancies per column and category
-    discrepancy_counts = filtered_results.groupby(["Column Name", "category"]).size().reset_index(name="Count")
+    discrepancy_counts = filtered_results.groupby(["Column Name", "Classification"]).size().reset_index(name="Count")
     # ✅ Bar Chart: Count of Discrepancies by Column
     st.header("📊 Discrepancy Analysis")
     fig = px.bar(
         discrepancy_counts,
         x="Column Name",
         y="Count",
-        color="category",
+        color="Classification",
         title="Discrepancies by Column",
         barmode="group",
         color_discrete_map=color_map  # ✅ Now dynamically generated
@@ -476,7 +476,7 @@ if not filtered_results.empty:
 
     # ✅ **Pie Chart: Category Distribution**
     st.header("Discrepancy Distribution")
-    pie_chart = px.pie(filtered_results, names="category", title="Proportion of Discrepancy Types", hole=0.4)
+    pie_chart = px.pie(filtered_results, names="Classification", title="Proportion of Discrepancy Types", hole=0.4)
     st.plotly_chart(pie_chart, use_container_width=True)
 
     # ✅ **Filtered Data Table Based on Selected Column**

@@ -1,68 +1,106 @@
-{   "identifier":"id",
-    "rules":{
-        "groxType": [
-            {
-                "type": "Value check",
-                "Rule Number": "1",
-                "columns": [
-                    "groupType"
-                ],
-                "category":"Type 1",
-                "constraints": {
-                    "min": 0,
-                    "max":1
-                },
-                "description": "groupType must be one of the predefined acceptable values.",
-                "valid_values": []
-            }
-        ],
-        "tickSizes": [
-            {
-                "type": "Numerical check",
-                "Rule Number": "1",
-                "category":"tickSizes 1",
-                "format_type":"Array",
-                "columns": [
-                    "tickSizes"
-                ],
-                "constraints": {
-                    "min": 1,
-                    "max":10
-                },
-                "sub_columns": [
-                    "lowerLimit",
-                    "upperLimit",
-                    "tickSize"
-                ],
-                "description": "Tick sizes must be a positive integer value.",
-                "valid_values": [],
-                "default_value": null,
-                "tolerance": null,
-                "exclusions": []
-            },
-            {
-                "type": "Predefined values check",
-                "Rule Number": "2",
-                "category":"tickSizes 2",
-                "columns": [
-                    "tickSizes"
-                ],
-                "constraints": {
-                    "min": 10,
-                    "max":50
-                },
-                "sub_columns": [
-                    "lowerLimit",
-                    "upperLimit",
-                    "tickSize"
-                ],
-                "format_type":"Array",
-                "description": "Tick sizes must be one of the predefined values.",
-                "valid_values": [],
-                "default_value": null,
-                "tolerance": null,
-                "exclusions": []
-            }
-        ]
+{
+    "identifier": "id",
+    "rules": {
+      "groupType": [
+        {
+          "type": "Value check",
+          "rulenumber": "TC-001",
+          "columns": [
+            "groupType"
+          ],
+          "constraints": {
+            "min": 0,
+            "max": 100
+          },
+          "classification": {
+            "min": "classification1",
+            "max": "classification2",
+            "min_max": "classification3",
+            "other": "classification4"
+          },
+          "description": "groupType must be one of the predefined acceptable values.",
+          "valid_values": [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15"
+          ]
+        }
+      ],
+      "tickSizes": [
+        {
+          "type": "Numerical check",
+          "rulenumber": "TC-002",
+          "format_type": "Array",
+          "columns": [
+            "tickSizes"
+          ],
+          "constraints": {
+            "min": 1,
+            "max": 10
+          },
+          "classification": {
+            "min": "classification1",
+            "max": "classification2",
+            "min_max": "classification3",
+            "other": "classification4"
+          },
+          "nested_identifier": [
+            "lowerLimit",
+            "upperLimit",
+            "tickSize"
+          ],
+          "description": "Tick sizes must be a positive integer value.",
+          "valid_values": [],
+          "default_value": null,
+          "exclusions": []
+        },
+        {
+          "type": "Predefined values check",
+          "rulenumber": "TC-003",
+          "classification": {
+            "min": "classification1",
+            "max": "classification2",
+            "min_max": "classification3",
+            "other": "classification4"
+          },
+          "columns": [
+            "tickSizes"
+          ],
+          "constraints": {
+            "min": 10,
+            "max": 50
+          },
+          "nested_identifier": [
+            "lowerLimit",
+            "upperLimit",
+            "tickSize"
+          ],
+          "format_type": "Array",
+          "description": "Tick sizes must be one of the predefined values.",
+          "valid_values": [
+            3,
+            4,
+            8,
+            16,
+            32,
+            64
+          ],
+          "default_value": null,
+          "exclusions": []
+        }
+      ]
     }
-}
+  }

@@ -122,10 +122,10 @@ class DataProcessor:
 
         # Identify array and object fields based on rules_config.json
         array_fields = {
-            key: rule["sub_columns"]
+            key: rule["nested_identifier"]
             for key, rules in self.rules_config["rules"].items()
             for rule in rules
-            if rule.get("format_type", "").lower() == "array" and "sub_columns" in rule
+            if rule.get("format_type", "").lower() == "array" and "nested_identifier" in rule
         }
 
         # ✅ Handle both file paths and uploaded files (BytesIO)
@@ -436,7 +436,7 @@ class DataProcessor:
             (
                 key
                 for key, rules in self.rules_config["rules"].items()
-                if any("sub_columns" in rule for rule in rules)
+                if any("nested_identifier" in rule for rule in rules)
             ),
             None,
         )
@@ -470,9 +470,9 @@ class DataProcessor:
         # ✅ Dynamically extract sub-columns from rules_config.json
         sub_columns = next(
             (
-                rule.get("sub_columns")
+                rule.get("nested_identifier")
                 for rule in array_rules
-                if "sub_columns" in rule
+                if "nested_identifier" in rule
             ),
             [],
         )
@@ -498,7 +498,7 @@ class DataProcessor:
                     key_column: row[key_column],
                     "Column Name": "ALL",
                     "Rule Type": "Missing in Baseline",
-                    "category": "INFO",
+                    "Classification": "MISSING",
                     "Rule Number": "Missing_Row_Candidate",
                     "Description": "Row exists in candidate but is missing in baseline.",
                     "Baseline Field Value": "MISSING",
@@ -514,7 +514,7 @@ class DataProcessor:
                     key_column: row[key_column],
                     "Column Name": "ALL",
                     "Rule Type": "Missing in Candidate",
-                    "category": "INFO",
+                    "Classification": "MISSING",
                     "Rule Number": "Missing_Row_Baseline",
                     "Description": "Row exists in baseline but is missing in candidate.",
                     "Baseline Field Value": row.to_dict(),
@@ -531,7 +531,7 @@ class DataProcessor:
                         f"Error: Rule for column '{column_name}' is not formatted correctly. Expected dict, got {type(rule)}"
                     )
 
-                rule_number = rule.get("Rule Number", "N/A")
+                rule_number = rule.get("rulenumber", "N/A")
                 rule_type = rule.get("type", "Unknown")
                 rule_description = rule.get("description", "No description available")
 
@@ -585,7 +585,7 @@ class DataProcessor:
                             )
                             df_merged.loc[
                                 df_merged["rule_violation"], "classification"
-                            ] = rule.get("category", "None")
+                            ] = rule.get("classification", {}).get("other")
 
                         discrepancies = self.final_discrepancy_list(
                             df_merged,
@@ -618,7 +618,7 @@ class DataProcessor:
                     key_column: row[key_column],
                     "Column Name": col,
                     "Rule Type": rule_type,
-                    "category": row["classification"],
+                    "Classification": row["classification"],
                     "Rule Number": rule_number,
                     "Description": rule_description,
                     "Baseline Field Value": row[col_baseline],
@@ -638,7 +638,7 @@ class DataProcessor:
         array_rule_key,
         array_rules,):
         for rule in array_rules:
-            rule_number = rule.get("Rule Number", "N/A")
+            rule_number = rule.get("rulenumber", "N/A")
             rule_type = rule.get("type", "Unknown")
             rule_description = rule.get("description", "No description available")
             if "constraints" in rule:
@@ -655,11 +655,6 @@ class DataProcessor:
                 )
                 + r"\s*\}"
             )
-
-            print(
-                f"🔹 Generated Regex Pattern: {array_pattern.pattern}"
-            )  # ✅ Debugging Output
-
             if array_rule_key in self.rules_config["rules"]:
                 format_type = next(
                     (
@@ -688,13 +683,6 @@ class DataProcessor:
                         rf"{re.escape(array_rule_key)}\[\d+\]_candidate", col
                     )
                 ]
-                print(
-                    f"🔹 Extracted Array Columns (Baseline): {array_columns_baseline}"
-                )
-                print(
-                    f"🔹 Extracted Array Columns (Candidate): {array_columns_candidate}"
-                )
-
             elif format_type == "Object":
                 # Match matchId columns (Object Format)
                 array_columns_baseline = [
@@ -707,25 +695,8 @@ class DataProcessor:
                     for col in df_merged.columns
                     if re.search(rf"{re.escape(array_rule_key)}_candidate", col)
                 ]
-                print(
-                    f"🔹 Extracted Object Columns (Baseline): {array_columns_baseline}"
-                )
-                print(
-                    f"🔹 Extracted Object Columns (Candidate): {array_columns_candidate}"
-                )
-
             else:
-                print(
-                    f"⚠️ Warning: Format type unknown for {array_rule_key}, no extraction applied."
-                )
                 array_columns_baseline, array_columns_candidate = [], []
-
-            print(
-                f"🔹 Extracted array_rule_key columns (Baseline): {array_columns_baseline}"
-            )
-            print(
-                f"🔹 Extracted array_rule_key columns (Candidate): {array_columns_candidate}"
-            )
 
             # ✅ Iterate over all rows
             for _, row in df_merged.iterrows():
@@ -833,7 +804,7 @@ class DataProcessor:
                     key_column: row[key_column],
                     "Column Name": output_column_name,
                     "Rule Type": rule_type,
-                    "category": row["classification"],
+                    "Classification": row["classification"],
                     "Rule Number": rule_number,
                     "Description": rule_description,
                     "Baseline Field Value": base_val,
@@ -843,13 +814,6 @@ class DataProcessor:
         return discrepancies
 
     def _extracted_discrepancy_classification(self, rule, df_merged, arg2, arg3):
-        df_merged.loc[df_merged["rule_violation"] <= arg2, "classification"] = rule.get(
-            "category", "ACCEPTABLE"
-        )
-        df_merged.loc[df_merged["rule_violation"] >= arg3, "classification"] = rule.get(
-            "category", "FATAL"
-        )
-        df_merged.loc[
-            (df_merged["rule_violation"] > arg2) & (df_merged["rule_violation"] < arg3),
-            "classification",
-        ] = rule.get("category", "WARNING")
+        df_merged.loc[df_merged["rule_violation"] <= arg2, "classification"] = rule.get("classification", {}).get("min")
+        df_merged.loc[df_merged["rule_violation"] >= arg3, "classification"] = rule.get("classification", {}).get("max")
+        df_merged.loc[(df_merged["rule_violation"] > arg2) & (df_merged["rule_violation"] < arg3), "classification",] = rule.get("classification", {}).get("min_max")
