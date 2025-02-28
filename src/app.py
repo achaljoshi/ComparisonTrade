@@ -339,6 +339,7 @@ if apply_filter_clicked and "results" in st.session_state:
             for category, rules in rules_config["rules"].items():
                 for rule in rules:
                     rule_number = rule.get("rulenumber", "Unknown Rule")
+                    rule_type = rule.get("type", "Unknown Type")  # ✅ Get Rule Type
                     constraints = rule.get("constraints", {})
                     rule_columns = rule.get("columns", [])
                     format_type = rule.get("format_type", "Simple")
@@ -347,21 +348,29 @@ if apply_filter_clicked and "results" in st.session_state:
                     max_constraint = constraints.get("max", None)
 
                     print(f"\n🔍 [DEBUG] Processing Rule: {rule_number} ({format_type})")
+                    print(f"🔹 Rule Type: {rule_type}")
                     print(f"🔹 Columns: {rule_columns}")
                     print(f"🔹 Old Min: {constraints.get('min', None)}, New Min: {min_constraint}")
                     print(f"🔹 Old Max: {constraints.get('max', None)}, New Max: {max_constraint}")
 
-                    # ✅ Apply filtering based on format type
+                    # ✅ Apply filtering based on format type + Rule Type
                     for col in rule_columns:
                         if format_type == "Array":
-                            # ✅ Ensure column name pattern matching for arrays like `tickSizes[0].lowerLimit`
-                            df = df[~((df["Column Name"].str.contains(col, regex=False)) & (df["Difference"] < min_constraint))]
-                            df = df[~((df["Column Name"].str.contains(col, regex=False)) & (df["Difference"] > max_constraint))]
+                            df = df[~((df["Column Name"].str.contains(col, regex=False)) &
+                                      (df["Rule Type"] == rule_type) &  # ✅ Now filtering with Rule Type
+                                      (df["Difference"] < min_constraint))]
+                            df = df[~((df["Column Name"].str.contains(col, regex=False)) &
+                                      (df["Rule Type"] == rule_type) &  # ✅ Now filtering with Rule Type
+                                      (df["Difference"] > max_constraint))]
                         else:
                             if min_constraint is not None:
-                                df = df[~((df["Column Name"] == col) & (df["Difference"] < min_constraint))]
+                                df = df[~((df["Column Name"] == col) &
+                                          (df["Rule Type"] == rule_type) &  # ✅ Now filtering with Rule Type
+                                          (df["Difference"] < min_constraint))]
                             if max_constraint is not None:
-                                df = df[~((df["Column Name"] == col) & (df["Difference"] > max_constraint))]
+                                df = df[~((df["Column Name"] == col) &
+                                          (df["Rule Type"] == rule_type) &  # ✅ Now filtering with Rule Type
+                                          (df["Difference"] > max_constraint))]
 
         # ✅ Store updated filtered results
         st.session_state["filtered_results"] = df
@@ -372,6 +381,7 @@ if apply_filter_clicked and "results" in st.session_state:
 
         # ✅ Refresh UI
         st.rerun()
+
 
 
 # ✅ Display Filtered Results
