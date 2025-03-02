@@ -151,7 +151,7 @@
       "id": [
         {
           "type": "Numerical check",
-          "rulenumber": "TC-008",
+          "rulenumber": "TC-008-B",
           "columns": [
             "orderBookId"
           ],
@@ -169,7 +169,7 @@
         },
         {
           "type": "Numerical check",
-          "rulenumber": "TC-008",
+          "rulenumber": "TC-008-A",
           "columns": [
             "price"
           ],
@@ -1119,7 +1119,7 @@
             "other": "classification4"
           },
           "description": "Default value for groupType is 0 when it is undefined or not applicable.",
-          "default_value": "0"
+          "default_value": 0
         }
       ],
       "optionType": [
@@ -1143,7 +1143,7 @@
             "optionType"
           ],
           "description": "If optionType is not provided, it defaults to '0' (Undefined).",
-          "default_value": "0"
+          "default_value": 0
         }
       ],
       "optionStyle": [
@@ -1459,7 +1459,7 @@
             "currencyUnit"
           ],
           "description": "If the currencyUnit is not specified, it should default to '0' (Undefined).",
-          "default_value": "0"
+          "default_value": 0
         }
       ],
       "currencyRelation": [
@@ -1516,7 +1516,7 @@
             "contractSize"
           ],
           "description": "Set a default value for contractSize if not provided.",
-          "default_value": "0"
+          "default_value": 0
         }
       ],
       "priceQuotationFactor": [
@@ -1588,7 +1588,7 @@
         },
         {
           "type": "Numerical check",
-          "rulenumber": "TC-091",
+          "rulenumber": "TC-091-A",
           "columns": [
             "priceUnit"
           ],
@@ -1608,7 +1608,7 @@
       "tickSizes": [
         {
           "type": "Numerical check",
-          "rulenumber": "TC-091",
+          "rulenumber": "TC-091-B",
           "format_type": "Array",
           "columns": [
             "tickSizes"
@@ -1630,7 +1630,7 @@
           ],
           "description": "Tick sizes must be a positive integer value.",
           "valid_values": [],
-          "default_value": null,
+          "default_value": 0,
           "exclusions": []
         },
         {
@@ -1664,7 +1664,7 @@
             32,
             64
           ],
-          "default_value": null,
+          "default_value": 0,
           "exclusions": []
         }
       ],
@@ -2732,31 +2732,21 @@
           "format": "String",
           "relations": [],
           "valid_values": [],
-          "default_value": "",
+          "default_value": 0,
           "exclusions": []
         },
         {
-          "type": "Numerical check",
-          "rulenumber": "TC-153",
-          "columns": [
-            "id"
-          ],
-          "description": "The id must be a unique integer and unchanged as long as the participant exists in the reference data.",
-          "constraints": {
-            "min": 1
-          },
-          "classification": {
-            "min": "classification1",
-            "max": "classification2",
-            "min_max": "classification3",
-            "other": "classification4"
-          },
-          "format": "Integer",
-          "relations": [],
-          "valid_values": [],
-          "default_value": "",
-          "exclusions": []
-        },
+  "type": "Numerical check",
+  "rulenumber": "TC-153",
+  "columns": ["id"],
+  "description": "The id must be a unique integer...",
+  "constraints": {
+    "min": 1,
+    "max": 10000
+  },
+  "valid_values": [1001, 1002, 1003, 1004],
+  "default_value": 1001
+},
         {
           "type": "Boolean check",
           "rulenumber": "TC-154",
@@ -2794,7 +2784,7 @@
           "format": "Short",
           "relations": [],
           "valid_values": [],
-          "default_value": "",
+          "default_value": 0,
           "exclusions": []
         },
         {
@@ -2816,7 +2806,7 @@
           "format": "String",
           "relations": [],
           "valid_values": [],
-          "default_value": "",
+          "default_value": 0,
           "exclusions": []
         },
         {
@@ -2833,7 +2823,7 @@
           "format": "Byte",
           "relations": [],
           "valid_values": [],
-          "default_value": "",
+          "default_value": 0,
           "classification": {},
           "exclusions": []
         },
@@ -2855,7 +2845,7 @@
             "1",
             "2"
           ],
-          "default_value": "",
+          "default_value": 0,
           "classification": {},
           "exclusions": []
         },
@@ -2878,7 +2868,7 @@
           "format": "String",
           "relations": [],
           "valid_values": [],
-          "default_value": "",
+          "default_value": "0",
           "exclusions": []
         },
         {
@@ -2900,7 +2890,7 @@
           "format": "String",
           "relations": [],
           "valid_values": [],
-          "default_value": "",
+          "default_value": "0",
           "exclusions": []
         }
       ],

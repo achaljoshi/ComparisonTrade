@@ -245,43 +245,79 @@ st.sidebar.header("🔍 Filter Rules")
 selected_filters = st.session_state.get("selected_filters", {})
 
 for category, rules in rules_config.get("rules", {}).items():
-    for rule in rules:
-        rule_number = rule.get("rulenumber", "Unknown Rule")
-        rule_type = rule.get("type", "Unknown Type")
-        rule_columns = ", ".join(rule.get("columns", []))
-        rule_description = rule.get("description", "No Description")
-        constraints = rule.get("constraints", {})
-        sub_columns = rule.get("sub_columns", [])
+        for rule_index, rule in enumerate(rules):  # ✅ Add `rule_index` to ensure uniqueness
+            rule_number = rule.get("rulenumber", "Unknown Rule")
+            rule_type = rule.get("type", "Unknown Type")
+            rule_columns = ", ".join(rule.get("columns", []))
+            rule_description = rule.get("description", "No Description")
+            constraints = rule.get("constraints", {})
 
-        rule_key_prefix = f"{category}_{rule_number}"
-        st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
-        st.sidebar.write(f"📝 Columns: {rule_columns}")
-        st.sidebar.write(f"📌 Description: {rule_description}")
+            # ✅ Create a fully unique key (category + rule_number + rule_index)
+            rule_key_prefix = f"{category}_{rule_number}_{rule_index}"
+            st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
+            st.sidebar.write(f"📝 Columns: {rule_columns}")
+            st.sidebar.write(f"📌 Description: {rule_description}")
 
-        selected_filters.setdefault(rule_key_prefix, {})
+            selected_filters.setdefault(rule_key_prefix, {})
 
-        for key, value in rule.items():
-            if key == "constraints" and isinstance(value, dict):
-                for sub_key, sub_value in value.items():
-                    input_key = f"{rule_key_prefix}_{key}_{sub_key}"
+            # ✅ Handle numerical constraints (existing functionality)
+            for key, value in rule.items():
+                if key == "constraints" and isinstance(value, dict):
+                    for sub_key, sub_value in value.items():
+                        if isinstance(sub_value, (int, float)):  # ✅ Only process numerical constraints
+                            input_key = f"{rule_key_prefix}_{key}_{sub_key}"  # ✅ Unique key for constraints
 
-                    # ✅ Load previous value from session state if available
-                    prev_value = st.session_state.get(input_key, sub_value)
+                            prev_value = st.session_state.get(input_key, sub_value)
+                            new_value = st.sidebar.number_input(
+                                f"{sub_key.capitalize()} for {rule_number}",
+                                value=prev_value,
+                                key=input_key
+                            )
 
-                    # ✅ Number input for dynamic constraints update
-                    new_value = st.sidebar.number_input(
-                        f"{sub_key.capitalize()} for {rule_number}", value=prev_value, key=input_key
+                            if st.session_state.get(input_key, None) != new_value:
+                                st.session_state[input_key] = new_value
+                            rule["constraints"][sub_key] = new_value
+
+            # ✅ Handle `valid_values` (Dropdown Selection)
+            if "valid_values" in rule and isinstance(rule["valid_values"], list) and rule["valid_values"]:
+                for column in rule["columns"]:  # ✅ Ensure dropdowns are unique per column
+                    valid_values_key = f"{rule_key_prefix}_{column}_valid_values"
+                    prev_value = st.session_state.get(valid_values_key,
+                                                      rule["valid_values"][0])  # Default to first value
+
+                    selected_value = st.sidebar.selectbox(
+                        f"Select Value for {rule_number} ({column})",
+                        rule["valid_values"],
+                        index=rule["valid_values"].index(prev_value) if prev_value in rule["valid_values"] else 0,
+                        key=valid_values_key
                     )
 
-                    # ✅ Update session state immediately
-                    # ✅ Update only if the value is different
-                    if input_key not in st.session_state:
-                        st.session_state[input_key] = new_value
-                    elif st.session_state[input_key] != new_value:
-                        st.session_state[input_key] = new_value
+                    if st.session_state.get(valid_values_key, None) != selected_value:
+                        st.session_state[valid_values_key] = selected_value
 
-                    # ✅ Ensure the updated values are stored in `rules_config`
-                    rule["constraints"][sub_key] = new_value
+            # ✅ Handle `default_value` (Text Input or Number)
+            if "default_value" in rule:
+                for column in rule["columns"]:  # ✅ Ensure inputs are unique per column
+                    default_value_key = f"{rule_key_prefix}_{column}_default_value"
+                    default_value = rule["default_value"]
+
+                    if isinstance(default_value, (int, float)):  # Number input
+                        prev_value = st.session_state.get(default_value_key, default_value)
+                        selected_value = st.sidebar.number_input(
+                            f"Default Value for {rule_number} ({column})",
+                            value=prev_value,
+                            key=default_value_key
+                        )
+                    else:  # String input
+                        prev_value = st.session_state.get(default_value_key, str(default_value))
+                        selected_value = st.sidebar.text_input(
+                            f"Default Value for {rule_number} ({column})",
+                            value=prev_value,
+                            key=default_value_key
+                        )
+
+                    if st.session_state.get(default_value_key, None) != selected_value:
+                        st.session_state[default_value_key] = selected_value
 
             elif isinstance(value, (int, float)):
                 input_key = f"{rule_key_prefix}_{key}"
@@ -453,6 +489,8 @@ if not filtered_results.empty and job_response:
         )
     else:
         st.warning("Unsupported export format. Defaulting to CSV.")
+
+
 
 # ✅ Display Results
 filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
