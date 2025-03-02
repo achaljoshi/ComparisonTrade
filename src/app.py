@@ -241,94 +241,124 @@ else:
     print("🚨 [ERROR] `rules_config.json` file not found or path is incorrect!")
 
 # ✅ Sidebar: Dynamic Filters
+# ✅ Sidebar: Dynamic Filters
 st.sidebar.header("🔍 Filter Rules")
-selected_filters = st.session_state.get("selected_filters", {})
 
-for category, rules in rules_config.get("rules", {}).items():
-        for rule_index, rule in enumerate(rules):  # ✅ Add `rule_index` to ensure uniqueness
+# ✅ Ensure `rules_config` exists in session
+rules_config = st.session_state.get("rules_config", {})
+
+# ✅ Store dynamically selected constraints
+selected_constraints = {}
+
+# ✅ Process Normal Rules
+if "rules" in rules_config:
+    for category, rules in rules_config["rules"].items():
+        for rule in rules:
             rule_number = rule.get("rulenumber", "Unknown Rule")
             rule_type = rule.get("type", "Unknown Type")
-            rule_columns = ", ".join(rule.get("columns", []))
-            rule_description = rule.get("description", "No Description")
+            rule_columns = rule.get("columns", [])
             constraints = rule.get("constraints", {})
+            format_type = rule.get("format_type", "Simple")
 
-            # ✅ Create a fully unique key (category + rule_number + rule_index)
-            rule_key_prefix = f"{category}_{rule_number}_{rule_index}"
+            # ✅ Sidebar UI for constraints (min/max)
             st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
-            st.sidebar.write(f"📝 Columns: {rule_columns}")
-            st.sidebar.write(f"📌 Description: {rule_description}")
+            min_constraint = st.sidebar.number_input(f"Min ({rule_number})", value=constraints.get("min", 0.0))
+            max_constraint = st.sidebar.number_input(f"Max ({rule_number})", value=constraints.get("max", 100.0))
 
-            selected_filters.setdefault(rule_key_prefix, {})
+            # ✅ Store constraints dynamically
+            selected_constraints[rule_number] = {
+                "min": min_constraint,
+                "max": max_constraint,
+                "format_type": format_type,
+                "rule_type": rule_type,
+                "columns": rule_columns  # ✅ Store columns
+            }
 
-            # ✅ Handle numerical constraints (existing functionality)
-            for key, value in rule.items():
-                if key == "constraints" and isinstance(value, dict):
-                    for sub_key, sub_value in value.items():
-                        if isinstance(sub_value, (int, float)):  # ✅ Only process numerical constraints
-                            input_key = f"{rule_key_prefix}_{key}_{sub_key}"  # ✅ Unique key for constraints
+# ✅ Process Tick Sizes Separately (Handling `Rule Type`)
+tick_size_constraints = {}
+if "tickSizes" in rules_config:
+    for rule in rules_config["tickSizes"]:
+        rule_number = rule.get("rulenumber", "Unknown Rule")
+        rule_type = rule.get("type", "Unknown Type")
+        rule_columns = rule.get("columns", [])
+        constraints = rule.get("constraints", {})
+        format_type = rule.get("format_type", "Array")
+        tick_size = constraints.get("tickSize", None)
 
-                            prev_value = st.session_state.get(input_key, sub_value)
-                            new_value = st.sidebar.number_input(
-                                f"{sub_key.capitalize()} for {rule_number}",
-                                value=prev_value,
-                                key=input_key
-                            )
+        # ✅ Sidebar UI for Tick Size
+        st.sidebar.subheader(f"📏 Tick Size ({rule_number})")
+        if tick_size is not None:
+            tick_size = st.sidebar.number_input(f"Tick Size ({rule_number})", value=tick_size)
 
-                            if st.session_state.get(input_key, None) != new_value:
-                                st.session_state[input_key] = new_value
-                            rule["constraints"][sub_key] = new_value
+        # ✅ Store Tick Size Constraints
+        tick_size_constraints[rule_number] = {
+            "tickSize": tick_size,
+            "format_type": format_type,
+            "rule_type": rule_type,
+            "columns": rule_columns
+        }
 
-            # ✅ Handle `valid_values` (Dropdown Selection)
-            if "valid_values" in rule and isinstance(rule["valid_values"], list) and rule["valid_values"]:
-                for column in rule["columns"]:  # ✅ Ensure dropdowns are unique per column
-                    valid_values_key = f"{rule_key_prefix}_{column}_valid_values"
-                    prev_value = st.session_state.get(valid_values_key,
-                                                      rule["valid_values"][0])  # Default to first value
+# ✅ Apply Filters Automatically Based on Rule Type
+if "results" in st.session_state:
+    df = st.session_state.get("results", pd.DataFrame()).copy()
 
-                    selected_value = st.sidebar.selectbox(
-                        f"Select Value for {rule_number} ({column})",
-                        rule["valid_values"],
-                        index=rule["valid_values"].index(prev_value) if prev_value in rule["valid_values"] else 0,
-                        key=valid_values_key
-                    )
+    if not df.empty:
+        # ✅ Ensure numeric conversion
+        def extract_numeric(value):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return None
 
-                    if st.session_state.get(valid_values_key, None) != selected_value:
-                        st.session_state[valid_values_key] = selected_value
+        df["Baseline Field Value Numeric"] = df["Baseline Field Value"].apply(extract_numeric)
+        df["Candidate Field Value Numeric"] = df["Candidate Field Value"].apply(extract_numeric)
 
-            # ✅ Handle `default_value` (Text Input or Number)
-            if "default_value" in rule:
-                for column in rule["columns"]:  # ✅ Ensure inputs are unique per column
-                    default_value_key = f"{rule_key_prefix}_{column}_default_value"
-                    default_value = rule["default_value"]
+        # ✅ Compute absolute difference
+        df["Difference"] = abs(df["Baseline Field Value Numeric"] - df["Candidate Field Value Numeric"])
 
-                    if isinstance(default_value, (int, float)):  # Number input
-                        prev_value = st.session_state.get(default_value_key, default_value)
-                        selected_value = st.sidebar.number_input(
-                            f"Default Value for {rule_number} ({column})",
-                            value=prev_value,
-                            key=default_value_key
-                        )
-                    else:  # String input
-                        prev_value = st.session_state.get(default_value_key, str(default_value))
-                        selected_value = st.sidebar.text_input(
-                            f"Default Value for {rule_number} ({column})",
-                            value=prev_value,
-                            key=default_value_key
-                        )
+        # ✅ Apply Min/Max Constraints for ALL columns
+        for rule_number, rule_data in selected_constraints.items():
+            min_constraint = rule_data.get("min", None)
+            max_constraint = rule_data.get("max", None)
+            rule_type = rule_data.get("rule_type", "Unknown Type")
+            columns = rule_data.get("columns", [])
 
-                    if st.session_state.get(default_value_key, None) != selected_value:
-                        st.session_state[default_value_key] = selected_value
+            for col in columns:
+                if min_constraint is not None:
+                    df = df[~((df["Column Name"] == col) &
+                              (df["Rule Type"] == rule_type) &
+                              (df["Difference"] < min_constraint))]
 
-            elif isinstance(value, (int, float)):
-                input_key = f"{rule_key_prefix}_{key}"
-                prev_value = selected_filters[rule_key_prefix].get(input_key, value)
-                new_value = st.sidebar.number_input(
-                    f"{key.capitalize()} for {rule_number}", value=prev_value, key=input_key
-                )
-                selected_filters[rule_key_prefix][input_key] = new_value
+                if max_constraint is not None:
+                    df = df[~((df["Column Name"] == col) &
+                              (df["Rule Type"] == rule_type) &
+                              (df["Difference"] > max_constraint))]
 
-# Store selected filters in session state
-st.session_state["selected_filters"] = selected_filters
+        # ✅ Apply Tick Size Filtering ONLY on `tickSizes` column
+        for rule_number, rule_data in tick_size_constraints.items():
+            tick_size = rule_data.get("tickSize", None)
+            rule_type = rule_data.get("rule_type", "Unknown Type")
+            format_type = rule_data.get("format_type", "Array")
+
+            if format_type == "Array" and tick_size is not None and tick_size > 0:
+                df = df[~((df["Column Name"] == "tickSizes") &
+                          (df["Rule Type"] == rule_type) &
+                          ((df["Difference"] % tick_size) != 0))]
+
+                # ✅ Debugging
+                print(f"   ✅ Tick Size Applied for {rule_number}, Column: tickSizes, TickSize: {tick_size}, Rule Type: {rule_type}")
+
+        # ✅ Store updated filtered results dynamically
+        st.session_state["filtered_results"] = df
+
+# ✅ Display Filtered Results
+st.subheader("Filtered Discrepancy Results")
+st.dataframe(st.session_state["filtered_results"])
+
+# ✅ Export Button for Downloading Filtered Data
+if not st.session_state["filtered_results"].empty:
+    csv = st.session_state["filtered_results"].to_csv(index=False).encode("utf-8")
+    st.download_button("Download Filtered Data", csv, "filtered_results.csv", "text/csv")
 
 
 # ✅ Buttons
