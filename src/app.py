@@ -278,54 +278,54 @@ for category, rules in rules_config.get("rules", {}).items():
                                 st.session_state[input_key] = new_value
                             rule["constraints"][sub_key] = new_value
 
-            # ✅ Handle `valid_values` (Dropdown Selection)
-            if "valid_values" in rule and isinstance(rule["valid_values"], list) and rule["valid_values"]:
-                for column in rule["columns"]:  # ✅ Ensure dropdowns are unique per column
-                    valid_values_key = f"{rule_key_prefix}_{column}_valid_values"
-                    prev_value = st.session_state.get(valid_values_key,
-                                                      rule["valid_values"][0])  # Default to first value
+            # # ✅ Handle `valid_values` (Dropdown Selection)
+            # if "valid_values" in rule and isinstance(rule["valid_values"], list) and rule["valid_values"]:
+            #     for column in rule["columns"]:  # ✅ Ensure dropdowns are unique per column
+            #         valid_values_key = f"{rule_key_prefix}_{column}_valid_values"
+            #         prev_value = st.session_state.get(valid_values_key,
+            #                                           rule["valid_values"][0])  # Default to first value
 
-                    selected_value = st.sidebar.selectbox(
-                        f"Select Value for {rule_number} ({column})",
-                        rule["valid_values"],
-                        index=rule["valid_values"].index(prev_value) if prev_value in rule["valid_values"] else 0,
-                        key=valid_values_key
-                    )
+            #         selected_value = st.sidebar.selectbox(
+            #             f"Select Value for {rule_number} ({column})",
+            #             rule["valid_values"],
+            #             index=rule["valid_values"].index(prev_value) if prev_value in rule["valid_values"] else 0,
+            #             key=valid_values_key
+            #         )
 
-                    if st.session_state.get(valid_values_key, None) != selected_value:
-                        st.session_state[valid_values_key] = selected_value
+            #         if st.session_state.get(valid_values_key, None) != selected_value:
+            #             st.session_state[valid_values_key] = selected_value
 
-            # ✅ Handle `default_value` (Text Input or Number)
-            if "default_value" in rule:
-                for column in rule["columns"]:  # ✅ Ensure inputs are unique per column
-                    default_value_key = f"{rule_key_prefix}_{column}_default_value"
-                    default_value = rule["default_value"]
+            # # ✅ Handle `default_value` (Text Input or Number)
+            # if "default_value" in rule:
+            #     for column in rule["columns"]:  # ✅ Ensure inputs are unique per column
+            #         default_value_key = f"{rule_key_prefix}_{column}_default_value"
+            #         default_value = rule["default_value"]
 
-                    if isinstance(default_value, (int, float)):  # Number input
-                        prev_value = st.session_state.get(default_value_key, default_value)
-                        selected_value = st.sidebar.number_input(
-                            f"Default Value for {rule_number} ({column})",
-                            value=prev_value,
-                            key=default_value_key
-                        )
-                    else:  # String input
-                        prev_value = st.session_state.get(default_value_key, str(default_value))
-                        selected_value = st.sidebar.text_input(
-                            f"Default Value for {rule_number} ({column})",
-                            value=prev_value,
-                            key=default_value_key
-                        )
+            #         if isinstance(default_value, (int, float)):  # Number input
+            #             prev_value = st.session_state.get(default_value_key, default_value)
+            #             selected_value = st.sidebar.number_input(
+            #                 f"Default Value for {rule_number} ({column})",
+            #                 value=prev_value,
+            #                 key=default_value_key
+            #             )
+            #         else:  # String input
+            #             prev_value = st.session_state.get(default_value_key, str(default_value))
+            #             selected_value = st.sidebar.text_input(
+            #                 f"Default Value for {rule_number} ({column})",
+            #                 value=prev_value,
+            #                 key=default_value_key
+            #             )
 
-                    if st.session_state.get(default_value_key, None) != selected_value:
-                        st.session_state[default_value_key] = selected_value
+            #         if st.session_state.get(default_value_key, None) != selected_value:
+            #             st.session_state[default_value_key] = selected_value
 
-            elif isinstance(value, (int, float)):
-                input_key = f"{rule_key_prefix}_{key}"
-                prev_value = selected_filters[rule_key_prefix].get(input_key, value)
-                new_value = st.sidebar.number_input(
-                    f"{key.capitalize()} for {rule_number}", value=prev_value, key=input_key
-                )
-                selected_filters[rule_key_prefix][input_key] = new_value
+            # elif isinstance(value, (int, float)):
+            #     input_key = f"{rule_key_prefix}_{key}"
+            #     prev_value = selected_filters[rule_key_prefix].get(input_key, value)
+            #     new_value = st.sidebar.number_input(
+            #         f"{key.capitalize()} for {rule_number}", value=prev_value, key=input_key
+            #     )
+            #     selected_filters[rule_key_prefix][input_key] = new_value
 
 # Store selected filters in session state
 st.session_state["selected_filters"] = selected_filters
@@ -426,12 +426,8 @@ if apply_filter_clicked and "results" in st.session_state:
 
 # **📤 Export Button**
 filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
-
-if not filtered_results.empty:
-    st.header("📊 Updated Discrepancy Analysis")
-    st.dataframe(filtered_results)
 job_response_path = st.session_state["job_response_path"]
-export_format = "CSV"  # Default file format
+
 
 if job_response_path and os.path.exists(job_response_path):
     try:

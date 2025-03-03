@@ -23,9 +23,9 @@
         contractSize = 10
         priceQuotationFactor = 1
         priceUnit = 2
-        tickSizes[0] = { lowerLimit = 1 upperLimit = 99 tickSize = 1 }
-        tickSizes[1] = { lowerLimit = 1 upperLimit = 99 tickSize = 1 }
-        tickSizes[2] = { lowerLimit = 1 upperLimit = 99 tickSize = 1 }
+        tickSizes[0] = {lowerLimit=1 upperLimit=99 tickSize=1}
+        tickSizes[1] = {lowerLimit=1 upperLimit=99 tickSize=1}
+        tickSizes[2] = {lowerLimit=1 upperLimit=99 tickSize=1}
         decimalsInPrice = 1
         decimalsInStrikePrice = 0
         decimalsInQuantity = 0

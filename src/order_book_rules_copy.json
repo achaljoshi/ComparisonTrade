@@ -66,40 +66,6 @@
           "valid_values": [],
           "default_value": null,
           "exclusions": []
-        },
-        {
-          "type": "Predefined values check",
-          "rulenumber": "TC-003",
-          "classification": {
-            "min": "classification1",
-            "max": "classification2",
-            "min_max": "classification3",
-            "other": "classification4"
-          },
-          "columns": [
-            "tickSizes"
-          ],
-          "constraints": {
-            "min": 10,
-            "max": 50
-          },
-          "nested_identifier": [
-            "lowerLimit",
-            "upperLimit",
-            "tickSize"
-          ],
-          "format_type": "Array",
-          "description": "Tick sizes must be one of the predefined values.",
-          "valid_values": [
-            3,
-            4,
-            8,
-            16,
-            32,
-            64
-          ],
-          "default_value": null,
-          "exclusions": []
         }
       ]
     }
