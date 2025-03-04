@@ -241,11 +241,18 @@ else:
     print("🚨 [ERROR] `rules_config.json` file not found or path is incorrect!")
 
 # ✅ Sidebar: Dynamic Filters
+
 # ✅ Sidebar: Dynamic Filters
 st.sidebar.header("🔍 Filter Rules")
 
 # ✅ Ensure `rules_config` exists in session
 rules_config = st.session_state.get("rules_config", {})
+
+# ✅ Retrieve existing results DataFrame from session state
+df = st.session_state.get("results", pd.DataFrame()).copy()
+
+if df.empty:
+    print("⚠️ Warning: No discrepancy results found in session state.")
 
 # ✅ Store dynamically selected constraints
 selected_constraints = {}
@@ -260,6 +267,8 @@ if "rules" in rules_config:
             constraints = rule.get("constraints", {})
             format_type = rule.get("format_type", "Simple")
 
+            print(f"🔍 Processing Rule: {rule_number}, Type: {rule_type}, Format: {format_type}, Columns: {rule_columns}")
+
             # ✅ Sidebar UI for constraints (min/max)
             st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
             min_constraint = st.sidebar.number_input(f"Min ({rule_number})", value=constraints.get("min", 0.0))
@@ -271,12 +280,13 @@ if "rules" in rules_config:
                 "max": max_constraint,
                 "format_type": format_type,
                 "rule_type": rule_type,
-                "columns": rule_columns  # ✅ Store columns
+                "columns": rule_columns
             }
 
-# ✅ Process Tick Sizes Separately (Handling `Rule Type`)
+# ✅ Process Tick Sizes Separately
 tick_size_constraints = {}
 if "tickSizes" in rules_config:
+    print("✅ Debug: Processing tickSizes rules...")
     for rule in rules_config["tickSizes"]:
         rule_number = rule.get("rulenumber", "Unknown Rule")
         rule_type = rule.get("type", "Unknown Type")
@@ -284,6 +294,8 @@ if "tickSizes" in rules_config:
         constraints = rule.get("constraints", {})
         format_type = rule.get("format_type", "Array")
         tick_size = constraints.get("tickSize", None)
+
+        print(f"🔍 TickSizes Rule: {rule_number}, Type: {rule_type}, Format: {format_type}, Columns: {rule_columns}")
 
         # ✅ Sidebar UI for Tick Size
         st.sidebar.subheader(f"📏 Tick Size ({rule_number})")
@@ -299,57 +311,65 @@ if "tickSizes" in rules_config:
         }
 
 # ✅ Apply Filters Automatically Based on Rule Type
-if "results" in st.session_state:
-    df = st.session_state.get("results", pd.DataFrame()).copy()
+if not df.empty:
+    # ✅ Ensure numeric conversion
+    def extract_numeric(value):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
 
-    if not df.empty:
-        # ✅ Ensure numeric conversion
-        def extract_numeric(value):
-            try:
-                return float(value)
-            except (ValueError, TypeError):
-                return None
+    df["Baseline Field Value Numeric"] = df["Baseline Field Value"].apply(extract_numeric)
+    df["Candidate Field Value Numeric"] = df["Candidate Field Value"].apply(extract_numeric)
 
-        df["Baseline Field Value Numeric"] = df["Baseline Field Value"].apply(extract_numeric)
-        df["Candidate Field Value Numeric"] = df["Candidate Field Value"].apply(extract_numeric)
+    # ✅ Compute absolute difference
+    df["Difference"] = abs(df["Baseline Field Value Numeric"] - df["Candidate Field Value Numeric"])
 
-        # ✅ Compute absolute difference
-        df["Difference"] = abs(df["Baseline Field Value Numeric"] - df["Candidate Field Value Numeric"])
+    # ✅ Update the Classification Column Instead of Removing Rows
+    for rule_number, rule_data in selected_constraints.items():
+        min_constraint = rule_data.get("min", None)
+        max_constraint = rule_data.get("max", None)
+        rule_type = rule_data.get("rule_type", "Unknown Type")
+        columns = rule_data.get("columns", [])
 
-        # ✅ Apply Min/Max Constraints for ALL columns
-        for rule_number, rule_data in selected_constraints.items():
-            min_constraint = rule_data.get("min", None)
-            max_constraint = rule_data.get("max", None)
-            rule_type = rule_data.get("rule_type", "Unknown Type")
-            columns = rule_data.get("columns", [])
+        for col in columns:
+            classification = rules_config["rules"].get(col, [{}])[0].get("classification", {})
 
-            for col in columns:
-                if min_constraint is not None:
-                    df = df[~((df["Column Name"] == col) &
-                              (df["Rule Type"] == rule_type) &
-                              (df["Difference"] < min_constraint))]
+            df.loc[(df["Column Name"] == col) &
+                   (df["Rule Type"] == rule_type) &
+                   (df["Difference"] <= min_constraint), "Classification"] = classification.get("min", "classification1")
 
-                if max_constraint is not None:
-                    df = df[~((df["Column Name"] == col) &
-                              (df["Rule Type"] == rule_type) &
-                              (df["Difference"] > max_constraint))]
+            df.loc[(df["Column Name"] == col) &
+                   (df["Rule Type"] == rule_type) &
+                   (df["Difference"] >= max_constraint), "Classification"] = classification.get("max", "classification2")
 
-        # ✅ Apply Tick Size Filtering ONLY on `tickSizes` column
-        for rule_number, rule_data in tick_size_constraints.items():
-            tick_size = rule_data.get("tickSize", None)
-            rule_type = rule_data.get("rule_type", "Unknown Type")
-            format_type = rule_data.get("format_type", "Array")
+            df.loc[(df["Column Name"] == col) &
+                   (df["Rule Type"] == rule_type) &
+                   (df["Difference"] > min_constraint) &
+                   (df["Difference"] < max_constraint), "Classification"] = classification.get("min_max", "classification3")
 
-            if format_type == "Array" and tick_size is not None and tick_size > 0:
-                df = df[~((df["Column Name"] == "tickSizes") &
-                          (df["Rule Type"] == rule_type) &
-                          ((df["Difference"] % tick_size) != 0))]
+            df.loc[df["Classification"].isna(), "Classification"] = classification.get("other", "classification4")
 
-                # ✅ Debugging
-                print(f"   ✅ Tick Size Applied for {rule_number}, Column: tickSizes, TickSize: {tick_size}, Rule Type: {rule_type}")
+    # ✅ Apply Tick Size Classification (Fixing Previous Issue)
+    for rule_number, rule_data in tick_size_constraints.items():
+        tick_size = rule_data.get("tickSize", None)
+        rule_type = rule_data.get("rule_type", "Unknown Type")
+        format_type = rule_data.get("format_type", "Array")
 
-        # ✅ Store updated filtered results dynamically
-        st.session_state["filtered_results"] = df
+        # ✅ Debug: Ensure tick sizes are applied correctly
+        print(f"✅ Applying Tick Size Rule: {rule_number}, Tick Size: {tick_size}, Format: {format_type}")
+
+        if format_type == "Array" and tick_size is not None and tick_size > 0:
+            for nested_col in ["lowerLimit", "upperLimit", "tickSize"]:
+                affected_rows = df[df["Column Name"].str.contains(nested_col, na=False) & (df["Rule Type"] == rule_type)]
+                print(f"📊 Debug: {nested_col} affected rows: {len(affected_rows)}")
+
+                df.loc[(df["Column Name"].str.contains(nested_col, na=False)) &
+                       (df["Rule Type"] == rule_type) &
+                       ((df["Difference"] % tick_size) != 0), "Classification"] = "Tick Size Mismatch"
+
+    # ✅ Store updated classified results dynamically
+    st.session_state["filtered_results"] = df
 
 # ✅ Display Filtered Results
 st.subheader("Filtered Discrepancy Results")
@@ -360,8 +380,6 @@ if not st.session_state["filtered_results"].empty:
     csv = st.session_state["filtered_results"].to_csv(index=False).encode("utf-8")
     st.download_button("Download Filtered Data", csv, "filtered_results.csv", "text/csv")
 
-
-# ✅ Buttons
 apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
 reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
 
