@@ -254,10 +254,15 @@ df = st.session_state.get("results", pd.DataFrame()).copy()
 if df.empty:
     print("⚠️ Warning: No discrepancy results found in session state.")
 
+# ✅ Debug: Print first few rows of Column Name
+if not df.empty:
+    print("✅ Debug: First few rows of `df['Column Name']`")
+    print(df["Column Name"].head())
+
 # ✅ Store dynamically selected constraints
 selected_constraints = {}
 
-# ✅ Process Normal Rules
+# ✅ Process Normal Rules (groupType)
 if "rules" in rules_config:
     for category, rules in rules_config["rules"].items():
         for rule in rules:
@@ -285,31 +290,43 @@ if "rules" in rules_config:
 
 # ✅ Process Tick Sizes Separately
 tick_size_constraints = {}
-if "tickSizes" in rules_config:
+if "rules" in rules_config and "tickSizes" in rules_config["rules"]:
     print("✅ Debug: Processing tickSizes rules...")
-    for rule in rules_config["tickSizes"]:
+
+    for rule in rules_config["rules"]["tickSizes"]:
         rule_number = rule.get("rulenumber", "Unknown Rule")
         rule_type = rule.get("type", "Unknown Type")
         rule_columns = rule.get("columns", [])
         constraints = rule.get("constraints", {})
         format_type = rule.get("format_type", "Array")
-        tick_size = constraints.get("tickSize", None)
 
-        print(f"🔍 TickSizes Rule: {rule_number}, Type: {rule_type}, Format: {format_type}, Columns: {rule_columns}")
+        tick_size_min = constraints.get("min", None)
+        tick_size_max = constraints.get("max", None)
 
-        # ✅ Sidebar UI for Tick Size
-        st.sidebar.subheader(f"📏 Tick Size ({rule_number})")
-        if tick_size is not None:
-            tick_size = st.sidebar.number_input(f"Tick Size ({rule_number})", value=tick_size)
+        print(f"🔍 TickSizes Rule: {rule_number}, Type: {rule_type}, Format: {format_type}, Min: {tick_size_min}, Max: {tick_size_max}")
+
+        # ✅ Sidebar UI for Tick Size (only for Array format_type)
+        if format_type == "Array":
+            st.sidebar.subheader(f"📏 Tick Size ({rule_number})")
+            if tick_size_min is not None and tick_size_max is not None:
+                min_constraint = st.sidebar.number_input(f"Min Tick Size ({rule_number})", value=tick_size_min)
+                max_constraint = st.sidebar.number_input(f"Max Tick Size ({rule_number})", value=tick_size_max)
 
         # ✅ Store Tick Size Constraints
         tick_size_constraints[rule_number] = {
-            "tickSize": tick_size,
+            "min": tick_size_min,
+            "max": tick_size_max,
             "format_type": format_type,
             "rule_type": rule_type,
             "columns": rule_columns
         }
+print("🔍 Debugging: Checking DataFrame Before Processing")
 
+if "results" in st.session_state:
+    df = st.session_state["results"]
+    print(f"✅ Debug: Found `results` in session_state. DataFrame shape: {df.shape}")
+else:
+    print("❌ Error: `results` is missing in `st.session_state`.")
 # ✅ Apply Filters Automatically Based on Rule Type
 if not df.empty:
     # ✅ Ensure numeric conversion
@@ -325,7 +342,7 @@ if not df.empty:
     # ✅ Compute absolute difference
     df["Difference"] = abs(df["Baseline Field Value Numeric"] - df["Candidate Field Value Numeric"])
 
-    # ✅ Update the Classification Column Instead of Removing Rows
+    # ✅ Apply groupType Classification (Fixing Previous Issue)
     for rule_number, rule_data in selected_constraints.items():
         min_constraint = rule_data.get("min", None)
         max_constraint = rule_data.get("max", None)
@@ -334,6 +351,8 @@ if not df.empty:
 
         for col in columns:
             classification = rules_config["rules"].get(col, [{}])[0].get("classification", {})
+
+            print(f"✅ Applying Classification for {col}")
 
             df.loc[(df["Column Name"] == col) &
                    (df["Rule Type"] == rule_type) &
@@ -350,35 +369,42 @@ if not df.empty:
 
             df.loc[df["Classification"].isna(), "Classification"] = classification.get("other", "classification4")
 
-    # ✅ Apply Tick Size Classification (Fixing Previous Issue)
+    # ✅ Apply Tick Size Classification
     for rule_number, rule_data in tick_size_constraints.items():
-        tick_size = rule_data.get("tickSize", None)
+        tick_size_min = rule_data.get("min", None)
+        tick_size_max = rule_data.get("max", None)
         rule_type = rule_data.get("rule_type", "Unknown Type")
         format_type = rule_data.get("format_type", "Array")
 
-        # ✅ Debug: Ensure tick sizes are applied correctly
-        print(f"✅ Applying Tick Size Rule: {rule_number}, Tick Size: {tick_size}, Format: {format_type}")
+        print(f"✅ Applying Tick Size Rule: {rule_number}, Min: {tick_size_min}, Max: {tick_size_max}, Format: {format_type}")
 
-        if format_type == "Array" and tick_size is not None and tick_size > 0:
+        if format_type == "Array" and tick_size_min is not None and tick_size_max is not None:
             for nested_col in ["lowerLimit", "upperLimit", "tickSize"]:
-                affected_rows = df[df["Column Name"].str.contains(nested_col, na=False) & (df["Rule Type"] == rule_type)]
-                print(f"📊 Debug: {nested_col} affected rows: {len(affected_rows)}")
+                # ✅ Improve Filtering: Check if Column Name starts with "tickSizes" to include nested values
+                affected_rows = df[df["Column Name"].str.startswith("tickSizes") &
+                                   df["Column Name"].str.contains(nested_col, na=False, regex=True) &
+                                   (df["Rule Type"] == rule_type)]
 
-                df.loc[(df["Column Name"].str.contains(nested_col, na=False)) &
-                       (df["Rule Type"] == rule_type) &
-                       ((df["Difference"] % tick_size) != 0), "Classification"] = "Tick Size Mismatch"
+                print(f"📊 Debug: {nested_col} affected rows before classification: {len(affected_rows)}")
 
-    # ✅ Store updated classified results dynamically
-    st.session_state["filtered_results"] = df
+                if not affected_rows.empty:
+                    print(f"✅ Applying Tick Size Classification for {nested_col}...")
 
-# ✅ Display Filtered Results
-st.subheader("Filtered Discrepancy Results")
-st.dataframe(st.session_state["filtered_results"])
+                    # ✅ Fix: Preserve existing classifications while applying "Tick Size Out of Range"
+                    df.loc[(df["Column Name"].str.startswith("tickSizes")) &
+                           (df["Column Name"].str.contains(nested_col, na=False, regex=True)) &
+                           (df["Rule Type"] == rule_type) &
+                           (df["Difference"].notna()) &
+                           ((df["Difference"] < tick_size_min) | (
+                                       df["Difference"] > tick_size_max)), "Classification"] = df[ "Classification"].fillna(
+                        "") + " | Tick Size Out of Range"
 
-# ✅ Export Button for Downloading Filtered Data
-if not st.session_state["filtered_results"].empty:
-    csv = st.session_state["filtered_results"].to_csv(index=False).encode("utf-8")
-    st.download_button("Download Filtered Data", csv, "filtered_results.csv", "text/csv")
+                print(
+                    f"📊 Debug: {nested_col} affected rows after classification: {df[df['Classification'].str.contains('Tick Size Out of Range', na=False)].shape[0]}")
+
+# ✅ Store updated classified results dynamically
+st.session_state["filtered_results"] = df
+
 
 apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
 reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
@@ -475,73 +501,6 @@ if apply_filter_clicked and "results" in st.session_state:
 # **📤 Export Button**
 filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
 
-if not filtered_results.empty:
-    st.header("📊 Updated Discrepancy Analysis")
-    st.dataframe(filtered_results)
-job_response_path = st.session_state["job_response_path"]
-export_format = "CSV"  # Default file format
-
-if job_response_path and os.path.exists(job_response_path):
-    try:
-        with open(job_response_path, "r") as f:
-            job_response = json.load(f)
-            export_format = job_response.get("report", {}).get("format", "CSV").upper()
-    except Exception as e:
-        st.error(f"Error loading job response file: {str(e)}")
-        job_response = None
-else:
-    job_response = None
-
-if not filtered_results.empty and job_response:
-    # ✅ Generate Filename Using Job Response Data
-    baseline_env = job_response["baseline"]["env"]
-    candidate_env = job_response["candidate"]["env"]
-    baseline_label = job_response["baseline"]["label"]
-    candidate_label = job_response["candidate"]["label"]
-
-    filename = f"discrepancy_report_{baseline_env}_{candidate_env}_{baseline_label}_{candidate_label}"
-
-    # ✅ Export Data Based on Format
-    export_data = None
-    mime_type = "text/plain"
-
-    if export_format == "CSV":
-        export_data = filtered_results.to_csv(index=False).encode("utf-8")
-        filename += ".csv"
-        mime_type = "text/csv"
-
-    elif export_format == "EXCEL":
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            filtered_results.to_excel(writer, index=False, sheet_name="Discrepancies")
-        export_data = output.getvalue()
-        filename += ".xlsx"
-        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-    elif export_format == "JSON":
-        export_data = filtered_results.to_json(orient="records", indent=4).encode("utf-8")
-        filename += ".json"
-        mime_type = "application/json"
-
-    elif export_format == "TEXT":
-        export_data = filtered_results.to_string(index=False).encode("utf-8")
-        filename += ".txt"
-        mime_type = "text/plain"
-
-    if export_data:
-        st.download_button(
-            label="📥 Download Report",
-            data=export_data,
-            file_name=filename,
-            mime=mime_type
-        )
-    else:
-        st.warning("Unsupported export format. Defaulting to CSV.")
-
-
-
-# ✅ Display Results
-filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
 if not filtered_results.empty:
     st.header("📊 Key Performance Indicators")
 
