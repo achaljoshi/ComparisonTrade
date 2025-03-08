@@ -376,31 +376,59 @@ if not df.empty:
         rule_type = rule_data.get("rule_type", "Unknown Type")
         format_type = rule_data.get("format_type", "Array")
 
-        print(f"✅ Applying Tick Size Rule: {rule_number}, Min: {tick_size_min}, Max: {tick_size_max}, Format: {format_type}")
+        print(
+            f"✅ Applying Tick Size Rule: {rule_number}, Min: {tick_size_min}, Max: {tick_size_max}, Format: {format_type}")
 
-        if format_type == "Array" and tick_size_min is not None and tick_size_max is not None:
+        if format_type == "Array":
             for nested_col in ["lowerLimit", "upperLimit", "tickSize"]:
-                # ✅ Improve Filtering: Check if Column Name starts with "tickSizes" to include nested values
-                affected_rows = df[df["Column Name"].str.startswith("tickSizes") &
-                                   df["Column Name"].str.contains(nested_col, na=False, regex=True) &
-                                   (df["Rule Type"] == rule_type)]
+                # ✅ Ensure `Classification` column exists before modifying
+                if "Classification" not in df.columns:
+                    df["Classification"] = ""
 
+                # ✅ Identify affected rows before classification
+                mask = (
+                        df["Column Name"].str.startswith("tickSizes") &
+                        df["Column Name"].str.contains(nested_col, na=False, regex=True) &
+                        df["Difference"].notna()
+                )
+
+                affected_rows = df[mask]
                 print(f"📊 Debug: {nested_col} affected rows before classification: {len(affected_rows)}")
 
                 if not affected_rows.empty:
                     print(f"✅ Applying Tick Size Classification for {nested_col}...")
 
-                    # ✅ Fix: Preserve existing classifications while applying "Tick Size Out of Range"
-                    df.loc[(df["Column Name"].str.startswith("tickSizes")) &
-                           (df["Column Name"].str.contains(nested_col, na=False, regex=True)) &
-                           (df["Rule Type"] == rule_type) &
-                           (df["Difference"].notna()) &
-                           ((df["Difference"] < tick_size_min) | (
-                                       df["Difference"] > tick_size_max)), "Classification"] = df[ "Classification"].fillna(
-                        "") + " | Tick Size Out of Range"
+                    # ✅ Check if classification exists before applying it
+                    if "classification" in rule_data:
+                        classification = rule_data["classification"]
+
+                        # ✅ Fix: Append classification instead of overwriting
+                        if rule_number == "TC-002":
+                            df.loc[mask & (df["Difference"] < tick_size_min), "Classification"] = (
+                                    df["Classification"].fillna("").astype(str) + " | " + classification.get("min",
+                                                                                                             "Unknown")
+                            )
+                            df.loc[mask & (df["Difference"] > tick_size_max), "Classification"] = (
+                                    df["Classification"].fillna("").astype(str) + " | " + classification.get("max",
+                                                                                                             "Unknown")
+                            )
+                            df.loc[
+                                mask & (df["Difference"].between(tick_size_min, tick_size_max)), "Classification"] = (
+                                    df["Classification"].fillna("").astype(str) + " | " + classification.get("min_max",
+                                                                                                             "Unknown")
+                            )
+
+                        elif rule_number == "TC-003":
+                            valid_values = rule_data.get("valid_values", [])
+                            df.loc[mask & ~df["Candidate Field Value Numeric"].isin(valid_values), "Classification"] = (
+                                    df["Classification"].fillna("").astype(str) + " | " + classification.get("other",
+                                                                                                             "Unknown")
+                            )
+                    else:
+                        print(f"🚨 Warning: No `classification` found for rule `{rule_number}`.")
 
                 print(
-                    f"📊 Debug: {nested_col} affected rows after classification: {df[df['Classification'].str.contains('Tick Size Out of Range', na=False)].shape[0]}")
+                    f"📊 Debug: {nested_col} affected rows after classification: {df[df['Classification'].str.contains(classification.get('min', ''), na=False)].shape[0]}")
 
 # ✅ Store updated classified results dynamically
 st.session_state["filtered_results"] = df
