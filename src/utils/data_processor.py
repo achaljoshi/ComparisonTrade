@@ -613,27 +613,73 @@ class DataProcessor:
                         # Log the filter values being used
                         logging.debug(f"Using filter values for {column_name}.{rule_number}: min={updated_constraint_min}, max={updated_constraint_max}")
 
-                        if "constraints" in rule:
-                            df_merged["rule_violation"] = abs(
-                                pd.to_numeric(df_merged[col_candidate], errors="coerce")
-                                - pd.to_numeric(
-                                    df_merged[col_baseline], errors="coerce"
+                        # Determine data type of the values for comparison
+                        sample_baseline = df_merged[col_baseline].dropna().iloc[0] if not df_merged[col_baseline].dropna().empty else None
+                        sample_candidate = df_merged[col_candidate].dropna().iloc[0] if not df_merged[col_candidate].dropna().empty else None
+                        
+                        # Get the non-None sample to check type
+                        sample_value = sample_baseline if sample_baseline is not None else sample_candidate
+                        
+                        if sample_value is not None:
+                            # Check if the value can be converted to numeric
+                            try:
+                                float(str(sample_value))
+                                is_numeric = True
+                            except (ValueError, TypeError):
+                                is_numeric = False
+                                
+                            # Handle based on data type
+                            if is_numeric and "constraints" in rule:
+                                # Numeric comparison with constraints
+                                df_merged["rule_violation"] = abs(
+                                    pd.to_numeric(df_merged[col_candidate], errors="coerce")
+                                    - pd.to_numeric(
+                                        df_merged[col_baseline], errors="coerce"
+                                    )
                                 )
-                            )
-                            self._extracted_discrepancy_classification(
-                                rule,
-                                df_merged,
-                                updated_constraint_min,
-                                updated_constraint_max,
-                            )
+                                self._extracted_discrepancy_classification(
+                                    rule,
+                                    df_merged,
+                                    updated_constraint_min,
+                                    updated_constraint_max,
+                                )
+                            elif isinstance(sample_value, str):
+                                # String comparison with case sensitivity option
+                                ignore_case = rule.get("constraints", {}).get("ignorecase", "no").lower() == "yes"
+                                
+                                if ignore_case:
+                                    df_merged["rule_violation"] = df_merged.apply(
+                                        lambda row: str(row[col_baseline]).lower() != str(row[col_candidate]).lower() if pd.notna(row[col_baseline]) and pd.notna(row[col_candidate]) else True,
+                                        axis=1,
+                                    )
+                                else:
+                                    df_merged["rule_violation"] = df_merged.apply(
+                                        lambda row: str(row[col_baseline]) != str(row[col_candidate]) if pd.notna(row[col_baseline]) and pd.notna(row[col_candidate]) else True,
+                                        axis=1,
+                                    )
+                                
+                                # Set classification for string comparisons
+                                df_merged.loc[
+                                    df_merged["rule_violation"], "classification"
+                                ] = rule.get("classification", {}).get("other", "VALUE_MISMATCH")
+                            else:
+                                # Value check comparison (direct equality check)
+                                df_merged["rule_violation"] = df_merged.apply(
+                                    lambda row: row[col_baseline] != row[col_candidate] if pd.notna(row[col_baseline]) and pd.notna(row[col_candidate]) else True,
+                                    axis=1,
+                                )
+                                df_merged.loc[
+                                    df_merged["rule_violation"], "classification"
+                                ] = rule.get("classification", {}).get("other", "VALUE_MISMATCH")
                         else:
+                            # If no sample value available, do a string comparison as fallback
                             df_merged["rule_violation"] = df_merged.apply(
-                                lambda row: row[col_baseline] != row[col_candidate],
+                                lambda row: str(row[col_baseline]) != str(row[col_candidate]) if pd.notna(row[col_baseline]) and pd.notna(row[col_candidate]) else True,
                                 axis=1,
                             )
                             df_merged.loc[
                                 df_merged["rule_violation"], "classification"
-                            ] = rule.get("classification", {}).get("other")
+                            ] = rule.get("classification", {}).get("other", "VALUE_MISMATCH")
 
                         discrepancies = self.final_discrepancy_list(
                             df_merged,

@@ -305,12 +305,9 @@
             "name"
           ],
           "constraints": {
-            "min": 0
+            "ignorecase": "no"
           },
           "classification": {
-            "min": "classification1",
-            "max": "classification2",
-            "min_max": "classification3",
             "other": "classification4"
           },
           "description": "The participantType must be one of the predefined acceptable values.",
@@ -477,12 +474,9 @@
           ],
           "description": "The timestamp must be a long integer representing the time of the event.",
           "constraints": {
-            "min": 0
+            "ignorecase": "yes"
           },
           "classification": {
-            "min": "classification1",
-            "max": "classification2",
-            "min_max": "classification3",
             "other": "classification4"
           }
         },

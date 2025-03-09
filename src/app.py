@@ -15,6 +15,7 @@ import uuid
 import re
 from utils.ui_helpers import UIHelper
 from utils.file_handler import FileHandler
+import atexit
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -30,6 +31,19 @@ if os.path.exists(cache_dir):
 
 # **✅ Ensure `st.set_page_config()` is first**
 st.set_page_config(page_title="Discrepancy Dashboard", layout="wide")
+
+# Create a file handler for the session
+file_handler = FileHandler()
+
+# Register cleanup function to run when the app exits
+@atexit.register
+def cleanup_on_exit():
+    """Clean up temporary files when the app exits."""
+    try:
+        file_handler.cleanup()
+        logging.debug("Temporary files cleaned up automatically on exit")
+    except Exception as e:
+        logging.error(f"Error cleaning up temporary files: {str(e)}")
 
 # ✅ Clear Cache & Restart Button
 if st.sidebar.button("🔄 Clear Cache & Restart", key="restart_button"):
@@ -51,6 +65,8 @@ if "selected_filters" not in st.session_state:
     st.session_state["selected_filters"] = {}
 if "filtered_results" not in st.session_state:
     st.session_state["filtered_results"] = pd.DataFrame()
+if "apply_filters_auto" not in st.session_state:
+    st.session_state["apply_filters_auto"] = False
 
 # ✅ Define required config files before using them
 required_files = {
@@ -76,9 +92,6 @@ def main():
     """Main application entry point."""
     UIHelper.initialize_session_state()
     
-    # Initialize file handler
-    file_handler = FileHandler()
-    
     # Handle different screens
     if st.session_state["screen"] == "upload_config":
         handle_config_upload(file_handler)
@@ -90,13 +103,8 @@ def main():
         if "results" in st.session_state and not st.session_state["filtered_results"].empty:
             handle_filters_and_results()
     
-    # Cleanup button
-    if st.button("🗑️ Cleanup Temporary Files"):
-        success, message = file_handler.cleanup()
-        if success:
-            st.success(message)
-        else:
-            st.error(message)
+    # Cleanup temporary files automatically when the session ends
+    # This happens behind the scenes, no button needed
 
 def handle_config_upload(file_handler: FileHandler):
     """Handle configuration file upload screen."""
@@ -271,12 +279,21 @@ def handle_filters_and_results():
         apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
         reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
         
+        # Check if we need to auto-apply filters
+        auto_apply = st.session_state.get("apply_filters_auto", False)
+        
         if reset_filter_clicked:
             st.session_state["selected_filters"] = {}
             st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
+            # Clear the auto-apply flag
+            if "apply_filters_auto" in st.session_state:
+                del st.session_state["apply_filters_auto"]
             st.rerun()
         
-        if apply_filter_clicked and "results" in st.session_state:
+        if (apply_filter_clicked or auto_apply) and "results" in st.session_state:
+            # Clear the auto-apply flag
+            if "apply_filters_auto" in st.session_state:
+                del st.session_state["apply_filters_auto"]
             apply_filters()
         
         # Display results
@@ -289,44 +306,85 @@ def handle_filters_and_results():
 def apply_filters():
     """Apply filters to the results."""
     try:
+        logging.info("Starting apply_filters function")
+        
+        # Check for required session state variables
+        required_vars = ["processor", "file_type", "uploaded_file_baseline", "uploaded_file_candidate"]
+        missing_vars = [var for var in required_vars if var not in st.session_state]
+        
+        if missing_vars:
+            error_msg = f"Missing required session state variables: {', '.join(missing_vars)}"
+            logging.error(error_msg)
+            st.error(f"Application state error: {error_msg}. Please restart the application.")
+            return
+            
         processor = st.session_state["processor"]
         
         # Process the selected filters
-        processed_filters = processor.process_filters(st.session_state["selected_filters"])
+        selected_filters = st.session_state.get("selected_filters", {})
+        logging.info(f"Selected filters before processing: {selected_filters}")
         
-        # Log the processed filters for debugging
-        logging.debug(f"Processed filters: {processed_filters}")
+        try:
+            processed_filters = processor.process_filters(selected_filters)
+            logging.info(f"Processed filters: {processed_filters}")
+        except Exception as filter_error:
+            logging.error(f"Error processing filters: {str(filter_error)}", exc_info=True)
+            st.error(f"Error processing filters: {str(filter_error)}")
+            return
         
         # Get files and process
         file_type = st.session_state["file_type"]
         baseline_file = st.session_state["uploaded_file_baseline"]
         candidate_file = st.session_state["uploaded_file_candidate"]
         
+        logging.info(f"File type: {file_type}")
+        logging.info(f"Baseline file: {baseline_file.name if baseline_file else None}")
+        logging.info(f"Candidate file: {candidate_file.name if candidate_file else None}")
+        
         if not all([baseline_file, candidate_file]):
+            logging.error("Missing comparison files")
             st.error("Missing comparison files. Please upload both baseline and candidate files.")
             return
         
         # Process files
-        file_handler = FileHandler()
-        baseline_bytes = file_handler.prepare_file_for_processing(baseline_file)
-        candidate_bytes = file_handler.prepare_file_for_processing(candidate_file)
-        
-        df_baseline = processor.read_file(baseline_bytes, file_type)
-        df_candidate = processor.read_file(candidate_bytes, file_type)
-        
-        if df_baseline.empty or df_candidate.empty:
-            st.error("One of the files is empty after processing. Please check your data.")
+        try:
+            file_handler = FileHandler()
+            baseline_bytes = file_handler.prepare_file_for_processing(baseline_file)
+            candidate_bytes = file_handler.prepare_file_for_processing(candidate_file)
+            
+            df_baseline = processor.read_file(baseline_bytes, file_type)
+            df_candidate = processor.read_file(candidate_bytes, file_type)
+            
+            if df_baseline.empty or df_candidate.empty:
+                logging.error("One of the files is empty after processing")
+                st.error("One of the files is empty after processing. Please check your data.")
+                return
+                
+            # Log dataframe shapes for debugging
+            logging.info(f"Baseline dataframe shape: {df_baseline.shape}")
+            logging.info(f"Candidate dataframe shape: {df_candidate.shape}")
+        except Exception as file_error:
+            logging.error(f"Error processing files: {str(file_error)}", exc_info=True)
+            st.error(f"Error processing files: {str(file_error)}")
             return
         
         # Apply comparison with processed filters
-        updated_results = processor.compare_files(
-            df_baseline,
-            df_candidate,
-            file_type,
-            processed_filters
-        )
+        try:
+            updated_results = processor.compare_files(
+                df_baseline,
+                df_candidate,
+                file_type,
+                processed_filters
+            )
+            
+            logging.info(f"Updated results after comparison: {len(updated_results) if updated_results is not None else 'None'} rows")
+        except Exception as compare_error:
+            logging.error(f"Error comparing files: {str(compare_error)}", exc_info=True)
+            st.error(f"Error comparing files: {str(compare_error)}")
+            return
         
         if updated_results is None or updated_results.empty:
+            logging.error("No results after applying filters")
             st.error("No results after applying filters. Please check your filter settings.")
             return
             
@@ -335,8 +393,10 @@ def apply_filters():
         
         # Show success message
         st.sidebar.success("Filters applied successfully!")
+        logging.info("Filters applied successfully")
         
         # Rerun to update the UI
+        logging.info("Rerunning to update UI")
         st.rerun()
         
     except Exception as e:

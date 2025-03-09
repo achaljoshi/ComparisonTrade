@@ -3,7 +3,7 @@
         messageId = 1
         timestamp = 1740444933
         id = 70536
-        name = GAL
+        name = gal
         exchangeId = 15
         marketId = 103
         instrumentGroupId = 200
