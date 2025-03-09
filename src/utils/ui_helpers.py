@@ -3,6 +3,7 @@ import plotly.express as px
 import plotly.colors
 import pandas as pd
 from typing import Dict, List, Any, Tuple
+from io import BytesIO
 
 class UIHelper:
     """Helper class to manage Streamlit UI components and visualizations."""
@@ -29,7 +30,8 @@ class UIHelper:
             "uploaded_file_baseline": None,
             "uploaded_file_candidate": None,
             "results": None,
-            "processor": None
+            "processor": None,
+            "search_query": ""  # Initialize search_query with empty string
         }
         
         for key, default_value in defaults.items():
@@ -52,59 +54,152 @@ class UIHelper:
         # Initialize filter structure if needed
         if "columns" not in selected_filters:
             selected_filters["columns"] = {}
-        if "tick_sizes" not in selected_filters:
-            selected_filters["tick_sizes"] = {}
         if "array_fields" not in selected_filters:
             selected_filters["array_fields"] = {}
+            
+        # Initialize expanded state in session state if not present
+        if "expanded_sections" not in st.session_state:
+            st.session_state.expanded_sections = {}
+            
+        # Add search functionality with clear button
+        search_query = st.sidebar.text_input(
+            "Search by column or rule",
+            value=st.session_state.search_query,
+            key="filter_search",
+            placeholder="Search..."
+        )
         
-        # Track fields that have been processed to avoid duplicates
-        processed_fields = set()
+        # Clear button below search field
+        if st.sidebar.button(
+            "Clear Search",
+            key="clear_search",
+            help="Clear search field",
+            type="secondary",
+            use_container_width=True
+        ):
+            search_query = ""
+            st.session_state.search_query = ""
+            
+        # Update session state
+        st.session_state.search_query = search_query
+        search_query = search_query.lower()
+        
+        # First, collect all array field names to avoid duplicates
+        array_field_names = set(filter_metadata.get("array_fields", {}).keys())
+        
+        # Group rules by column name
+        column_rules = {}
+        for column_name, rules in filter_metadata.get("columns", {}).items():
+            # Skip if this column is already handled as an array field
+            if column_name in array_field_names:
+                continue
+                
+            # Filter out rules with format_type "Array" or "Object"
+            non_array_rules = [rule for rule in rules if rule.get("format_type") not in ["Array", "Object"]]
+            
+            # Only include columns that match the search query
+            if search_query and search_query not in column_name.lower() and not any(
+                search_query in rule.get("rulenumber", "").lower() for rule in non_array_rules
+            ):
+                continue
+                
+            column_rules[column_name] = non_array_rules
+        
+        # Add a separator
+        st.sidebar.markdown("---")
         
         # Process normal column rules
-        for column_name, rules in filter_metadata.get("columns", {}).items():
+        for column_name, rules in column_rules.items():
             if column_name not in selected_filters["columns"]:
                 selected_filters["columns"][column_name] = {}
-            
-            st.sidebar.subheader(f"📊 {column_name}")
-            for rule in rules:
-                selected_filters = UIHelper._render_column_rule_filter(
-                    column_name, rule, selected_filters
-                )
-            
-            # Mark this field as processed
-            processed_fields.add(column_name)
+                
+            # Initialize expanded state for this column if not present
+            section_key = f"column_{column_name}"
+            if section_key not in st.session_state.expanded_sections:
+                st.session_state.expanded_sections[section_key] = False
+                
+            # Create a collapsible section using expander
+            with st.sidebar.expander(f"📊 {column_name}", expanded=st.session_state.expanded_sections[section_key]):
+                # Set expanded state
+                st.session_state.expanded_sections[section_key] = True
+                
+                # Process each rule
+                for i, rule in enumerate(rules):
+                    # Skip rules that don't match the search query
+                    rule_number = rule.get("rulenumber", "N/A")
+                    if search_query and search_query not in column_name.lower() and search_query not in rule_number.lower():
+                        continue
+                    
+                    # Add a separator between rules (except for the first rule)
+                    if i > 0:
+                        st.sidebar.markdown("<hr style='margin: 10px 0; border: none; border-top: 1px solid #e6e9ef;'>", unsafe_allow_html=True)
+                        
+                    # Render the rule
+                    selected_filters = UIHelper._render_unified_rule_filter(
+                        column_name, rule, selected_filters
+                    )
         
         # Process array fields if present
+        array_fields = {}
         for field_name, field_data in filter_metadata.get("array_fields", {}).items():
-            # Always process array fields - they take precedence over other types
-            st.sidebar.subheader(f"📑 {field_name} (Array)")
-            selected_filters = UIHelper._render_array_field_filter(
-                field_name, field_data, selected_filters
-            )
+            # Only include array fields that match the search query
+            if search_query and search_query not in field_name.lower() and not any(
+                search_query in rule.get("rule_number", "").lower() for rule in field_data.get("rules", [])
+            ):
+                continue
+                
+            array_fields[field_name] = field_data
+            
+        for field_name, field_data in array_fields.items():
+            # Initialize expanded state for this array field if not present
+            section_key = f"array_{field_name}"
+            if section_key not in st.session_state.expanded_sections:
+                st.session_state.expanded_sections[section_key] = False
+                
+            # Create a collapsible section using expander
+            with st.sidebar.expander(f"📑 {field_name} (Array)", expanded=st.session_state.expanded_sections[section_key]):
+                # Set expanded state
+                st.session_state.expanded_sections[section_key] = True
+                
+                # Render array field rules
+                selected_filters = UIHelper._render_array_field_filter(
+                    field_name, field_data, selected_filters
+                )
         
         return selected_filters
 
     @staticmethod
-    def _render_column_rule_filter(column_name: str, rule: Dict[str, Any], selected_filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Render UI components for a column rule filter."""
+    def _render_unified_rule_filter(column_name: str, rule: Dict[str, Any], selected_filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Unified method to render UI components for column rules."""
         # Make all fields optional with appropriate fallbacks
         rule_number = rule.get("rule_number", rule.get("rulenumber", "N/A"))
         rule_type = rule.get("rule_type", rule.get("type", "Unknown"))
         category = rule.get("category", rule_type)
         constraints = rule.get("constraints", {})
         valid_values = rule.get("valid_values", [])
+        format_type = rule.get("format_type", "")
+        columns = rule.get("columns", [])
+        description = rule.get("description", "")
         
+        # Initialize the rule in selected_filters if it doesn't exist
         if rule_number not in selected_filters["columns"][column_name]:
             selected_filters["columns"][column_name][rule_number] = {}
         
         current_values = selected_filters["columns"][column_name][rule_number]
         
-        st.sidebar.markdown(f"**Rule {rule_number}** - {category}")
+        # Create a better rule header with column name, rule number and description
+        st.sidebar.markdown(f"**{column_name} - Rule {rule_number}**")
         
+        # Display description if available
+        if description:
+            st.sidebar.markdown(f"<small><i>{description}</i></small>", unsafe_allow_html=True)
+        
+        # Handle different rule types
         if valid_values:
             # Handle predefined values
+            st.sidebar.markdown("**Valid Values:**")
             selected_value = st.sidebar.selectbox(
-                f"Select value for {column_name}",
+                f"Select value",
                 options=valid_values,
                 key=f"{column_name}_{rule_number}_value"
             )
@@ -114,9 +209,12 @@ class UIHelper:
             min_constraint = constraints.get("min")
             max_constraint = constraints.get("max")
             
+            if min_constraint is not None or max_constraint is not None:
+                st.sidebar.markdown("**Constraints:**")
+                
             if min_constraint is not None:
                 new_min = st.sidebar.number_input(
-                    f"Min Value ({rule_number})",
+                    f"Min Value",
                     value=float(current_values.get("min", min_constraint)),
                     key=f"{column_name}_{rule_number}_min"
                 )
@@ -124,51 +222,33 @@ class UIHelper:
                 
             if max_constraint is not None:
                 new_max = st.sidebar.number_input(
-                    f"Max Value ({rule_number})",
+                    f"Max Value",
                     value=float(current_values.get("max", max_constraint)),
                     key=f"{column_name}_{rule_number}_max"
                 )
                 selected_filters["columns"][column_name][rule_number]["max"] = new_max
+                
+            # Handle ignorecase constraint for string fields
+            if constraints.get("ignorecase") is not None:
+                # Get the original constraint value
+                original_ignorecase = constraints.get("ignorecase", "no").lower() == "yes"
+                # Get the current value from selected filters, defaulting to original constraint value
+                current_ignorecase = current_values.get("ignorecase", original_ignorecase)
+                # Convert to boolean if it's a string
+                if isinstance(current_ignorecase, str):
+                    current_ignorecase = current_ignorecase.lower() == "yes"
+                
+                ignore_case = st.sidebar.checkbox(
+                    f"Ignore case",
+                    value=current_ignorecase,
+                    key=f"{column_name}_{rule_number}_ignorecase"
+                )
+                selected_filters["columns"][column_name][rule_number]["ignorecase"] = "yes" if ignore_case else "no"
         
+        # Store additional metadata
         selected_filters["columns"][column_name][rule_number].update({
-            "format_type": rule.get("format_type", ""),
+            "format_type": format_type,
             "rule_type": rule_type
-        })
-        
-        return selected_filters
-
-    @staticmethod
-    def _render_tick_size_filter(rule: Dict[str, Any], selected_filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Render UI components for a tick size filter."""
-        # Make rule_number optional with appropriate fallback
-        rule_number = rule.get("rule_number", rule.get("rulenumber", "N/A"))
-        constraints = rule.get("constraints", {})
-        nested_identifier = rule.get("nested_identifier", [])
-        
-        if rule_number not in selected_filters["tick_sizes"]:
-            selected_filters["tick_sizes"][rule_number] = {}
-        
-        current_values = selected_filters["tick_sizes"][rule_number]
-        
-        st.sidebar.markdown(f"**Tick Size Rule {rule_number}**")
-        
-        # Handle nested structure for tick sizes
-        for idx, identifier in enumerate(nested_identifier):
-            current_value = current_values.get(identifier, constraints.get(identifier, 0))
-            # Create a unique key using the index
-            unique_key = f"tick_size_{rule_number}_{identifier}_{idx}"
-            
-            new_value = st.sidebar.number_input(
-                f"{identifier} ({rule_number})",
-                value=float(current_value),
-                key=unique_key
-            )
-            selected_filters["tick_sizes"][rule_number][identifier] = new_value
-        
-        selected_filters["tick_sizes"][rule_number].update({
-            "format_type": rule.get("format_type", ""),
-            "rule_type": rule.get("rule_type", ""),
-            "columns": rule.get("columns", [])
         })
         
         return selected_filters
@@ -179,8 +259,9 @@ class UIHelper:
         # Initialize array field structure if needed
         if field_name not in selected_filters["array_fields"]:
             selected_filters["array_fields"][field_name] = {
-                "nested_identifier": field_data.get("nested_identifier", []),
-                "rules": []
+                "columns": field_data.get("columns", []),
+                "rules": [],
+                "format_type": field_data.get("format_type", "")
             }
         
         # Handle case where rules might be missing
@@ -193,8 +274,14 @@ class UIHelper:
             rule_number = rule.get("rule_number", rule.get("rulenumber", "N/A"))
             rule_type = rule.get("rule_type", rule.get("type", "Unknown"))
             constraints = rule.get("constraints", {})
+            description = rule.get("description", "")
             
-            st.sidebar.markdown(f"**Array Rule {rule_number}**")
+            # Create a better rule header with field name, rule number and description
+            st.sidebar.markdown(f"**{field_name} - Rule {rule_number}**")
+            
+            # Display description if available
+            if description:
+                st.sidebar.markdown(f"<small><i>{description}</i></small>", unsafe_allow_html=True)
             
             rule_data = {
                 "rule_number": rule_number,
@@ -202,7 +289,14 @@ class UIHelper:
             }
             
             # Handle constraints
-            for constraint_idx, (constraint_key, constraint_value) in enumerate(constraints.items()):
+            if constraints:
+                st.sidebar.markdown("**Constraints:**")
+                
+            for constraint_key, constraint_value in constraints.items():
+                # Skip non-standard constraints
+                if constraint_key not in ["min", "max", "ignorecase"]:
+                    continue
+                    
                 # Find current value with proper error handling
                 try:
                     current_value = next(
@@ -214,21 +308,36 @@ class UIHelper:
                 except (TypeError, AttributeError):
                     current_value = constraint_value
                 
-                # Convert to float with error handling
-                try:
-                    current_value = float(current_value)
-                except (ValueError, TypeError):
-                    current_value = 0.0
-                
-                # Create a unique key using all relevant identifiers
-                unique_key = f"{field_name}_{rule_number}_{constraint_key}_{rule_idx}_{constraint_idx}"
-                
-                new_value = st.sidebar.number_input(
-                    f"{constraint_key} ({rule_number})",
-                    value=current_value,
-                    key=unique_key
-                )
-                rule_data[constraint_key] = new_value
+                # Handle different constraint types
+                if constraint_key in ["min", "max"]:
+                    # Convert to float with error handling
+                    try:
+                        current_value = float(current_value)
+                    except (ValueError, TypeError):
+                        current_value = 0.0 if constraint_key == "min" else float("inf")
+                    
+                    # Create a unique key
+                    unique_key = f"{field_name}_{rule_number}_{constraint_key}_{rule_idx}"
+                    
+                    new_value = st.sidebar.number_input(
+                        f"{constraint_key.capitalize()} Value",
+                        value=current_value,
+                        key=unique_key
+                    )
+                    rule_data[constraint_key] = new_value
+                elif constraint_key == "ignorecase":
+                    # Handle ignorecase as a checkbox
+                    unique_key = f"{field_name}_{rule_number}_{constraint_key}_{rule_idx}"
+                    
+                    ignore_case = st.sidebar.checkbox(
+                        f"Ignore case",
+                        value=current_value.lower() == "yes" if isinstance(current_value, str) else bool(current_value),
+                        key=unique_key
+                    )
+                    rule_data[constraint_key] = "yes" if ignore_case else "no"
+            
+            # Add a small separator between rules
+            st.sidebar.markdown("<hr style='margin: 5px 0; border: none; border-top: 1px solid #e6e9ef;'>", unsafe_allow_html=True)
             
             # Update or append rule with proper error handling
             try:
@@ -266,8 +375,43 @@ class UIHelper:
         # Render charts
         UIHelper._render_discrepancy_charts(filtered_results)
         
-        # Render details table
+        # Render details table and download button
         st.header("Discrepancy Details")
+        
+        # Get report format from job_response
+        report_format = st.session_state.get("config_files", {}).get("uploaded_configs", {}).get("job_response", {}).get("report", {}).get("format", "CSV")
+        
+        # Add download button with proper format
+        if report_format.upper() == "JSON":
+            json_data = filtered_results.to_json(orient="records", indent=4)
+            st.download_button(
+                label="📥 Download Discrepancy Report (JSON)",
+                data=json_data,
+                file_name="discrepancy_report.json",
+                mime="application/json",
+                help="Download the discrepancy report in JSON format"
+            )
+        elif report_format.upper() == "CSV":
+            csv_data = filtered_results.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Discrepancy Report (CSV)",
+                data=csv_data,
+                file_name="discrepancy_report.csv",
+                mime="text/csv",
+                help="Download the discrepancy report in CSV format"
+            )
+        elif report_format.upper() == "EXCEL":
+            buffer = BytesIO()
+            filtered_results.to_excel(buffer, index=False)
+            st.download_button(
+                label="📥 Download Discrepancy Report (Excel)",
+                data=buffer.getvalue(),
+                file_name="discrepancy_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help="Download the discrepancy report in Excel format"
+            )
+            
+        # Display the dataframe
         st.dataframe(filtered_results)
 
     @staticmethod

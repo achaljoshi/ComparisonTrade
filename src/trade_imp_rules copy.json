@@ -3,19 +3,26 @@
     "matchId": [
         {
             "type": "Numerical check",
-            "Rule Number": "1",
+            "rulenumber": "T1",
             "columns": [
                 "matchId"
             ],
             "format_type":"Object",
-            "sub_columns": [
+            "nested_identifier": [
                 "matchGroupId",
                 "notUsed",
                 "combinationMatchId"
             ],
             "description": "The matchGroupId must be a monotonically increasing number per partition, assigned to an execution event.",
             "constraints": {
-                "min": 0
+                "min": 10,
+                "max": 50
+            },
+            "classification": {
+                "min": "classification1",
+                "max": "classification2",
+                "min_max": "classification3",
+                "other": "classification4"
             }
         }
     ],
@@ -31,7 +38,13 @@
                 "min": 1,
                 "max":2
             },
-            "format": "Long"
+            "classification": {
+                "min": "classification1",
+                "max": "classification2",
+                "min_max": "classification3",
+                "other": "classification4"
+            },
+            "format": "Integer"
         }
     ],
     "nationalBidPriceSnapshot": [
@@ -45,7 +58,13 @@
             "constraints": {
                 "min": 0
             },
-            "format": "Long"
+            "classification": {
+                "min": "classification1",
+                "max": "classification2",
+                "min_max": "classification3",
+                "other": "classification4"
+            },
+            "format": "Integer"
         }
     ],
     "tradeType": [
@@ -57,6 +76,12 @@
             ],
             "constraints": {
                 "min": 0
+            },
+            "classification": {
+                "min": "classification1",
+                "max": "classification2",
+                "min_max": "classification3",
+                "other": "classification4"
             },
             "description": "The tradeType field must be a byte value representing the status of the trade.",
             "valid_values": [
@@ -74,6 +99,12 @@
             "description": "The tradeType field must be within the valid byte range.",
             "constraints": {
                 "min": 0
+            },
+            "classification": {
+                "min": "classification1",
+                "max": "classification2",
+                "min_max": "classification3",
+                "other": "classification4"
             }
         }
     ],
@@ -88,6 +119,12 @@
             "constraints": {
                 "min": 0,
                 "max": 1
+            },
+            "classification": {
+                "min": "classification1",
+                "max": "classification2",
+                "min_max": "classification3",
+                "other": "classification4"
             }
         }
     ]

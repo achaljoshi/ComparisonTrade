@@ -644,8 +644,10 @@ class DataProcessor:
                                     updated_constraint_max,
                                 )
                             elif isinstance(sample_value, str):
-                                # String comparison with case sensitivity option
-                                ignore_case = rule.get("constraints", {}).get("ignorecase", "no").lower() == "yes"
+                                # Get ignorecase setting from filters if available, otherwise use rule default
+                                rule_number = rule.get("rule_number", rule.get("rulenumber"))
+                                filter_ignorecase = filters.get("columns", {}).get(column_name, {}).get(rule_number, {}).get("ignorecase")
+                                ignore_case = filter_ignorecase.lower() == "yes" if filter_ignorecase is not None else rule.get("constraints", {}).get("ignorecase", "no").lower() == "yes"
                                 
                                 if ignore_case:
                                     df_merged["rule_violation"] = df_merged.apply(
@@ -1029,17 +1031,45 @@ class DataProcessor:
             for column_name, rules in selected_filters.get("columns", {}).items():
                 processed_filters["columns"][column_name] = {}
                 for rule_number, rule_data in rules.items():
-                    processed_filters["columns"][column_name][rule_number] = {
-                        "min": float(rule_data.get("min", 0)) if rule_data.get("min") is not None else float("-inf"),
-                        "max": float(rule_data.get("max", float('inf'))) if rule_data.get("max") is not None else float("inf"),
+                    # Initialize the rule data structure
+                    processed_rule = {
                         "format_type": rule_data.get("format_type", ""),
                         "rule_type": rule_data.get("rule_type", "")
                     }
+                    
+                    # Process min/max constraints
+                    if "min" in rule_data:
+                        try:
+                            processed_rule["min"] = float(rule_data["min"])
+                        except (ValueError, TypeError):
+                            processed_rule["min"] = float("-inf")
+                    else:
+                        processed_rule["min"] = float("-inf")
+                        
+                    if "max" in rule_data:
+                        try:
+                            processed_rule["max"] = float(rule_data["max"])
+                        except (ValueError, TypeError):
+                            processed_rule["max"] = float("inf")
+                    else:
+                        processed_rule["max"] = float("inf")
+                    
+                    # Process ignorecase constraint
+                    if "ignorecase" in rule_data:
+                        processed_rule["ignorecase"] = rule_data["ignorecase"]
+                    
+                    # Process any other fields
+                    for key, value in rule_data.items():
+                        if key not in ["min", "max", "format_type", "rule_type", "ignorecase"]:
+                            processed_rule[key] = value
+                    
+                    processed_filters["columns"][column_name][rule_number] = processed_rule
             
             # Process array field filters
             for field_name, field_data in selected_filters.get("array_fields", {}).items():
                 processed_filters["array_fields"][field_name] = {
-                    "nested_identifier": field_data.get("nested_identifier", []),
+                    "columns": field_data.get("columns", []),
+                    "format_type": field_data.get("format_type", ""),
                     "rules": []
                 }
                 
