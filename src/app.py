@@ -247,36 +247,63 @@ st.sidebar.header("🔍 Filter Rules")
 # ✅ Ensure `rules_config` exists in session
 rules_config = st.session_state.get("rules_config", {})
 
-# ✅ Store dynamically selected constraints
-selected_constraints = {}
+# ✅ Retrieve existing selected_filters or initialize a new structure
+selected_filters = st.session_state.get("selected_filters", {})
 
 # ✅ Process Normal Rules
 if "rules" in rules_config:
-    for category, rules in rules_config["rules"].items():
-        for rule in rules:
+    for column_name, rules in rules_config["rules"].items():
+        for index, rule in enumerate(rules):
+            if not isinstance(rule, dict):
+                continue
+
             rule_number = rule.get("rulenumber", "Unknown Rule")
             rule_type = rule.get("type", "Unknown Type")
-            rule_columns = rule.get("columns", [])
+            category = rule.get("category", "General")
             constraints = rule.get("constraints", {})
             format_type = rule.get("format_type", "Simple")
 
-            # ✅ Sidebar UI for constraints (min/max)
-            st.sidebar.subheader(f"⚖️ {rule_number} ({rule_type})")
-            min_constraint = st.sidebar.number_input(f"Min ({rule_number})", value=constraints.get("min", 0.0))
-            max_constraint = st.sidebar.number_input(f"Max ({rule_number})", value=constraints.get("max", 100.0))
+            # ✅ Ensure the column_name entry exists in selected_filters
+            if column_name not in selected_filters:
+                selected_filters[column_name] = {}
 
-            # ✅ Store constraints dynamically
-            selected_constraints[rule_number] = {
-                "min": min_constraint,
-                "max": max_constraint,
+            # ✅ Ensure the rule_number entry exists in selected_filters
+            if rule_number not in selected_filters[column_name]:
+                selected_filters[column_name][rule_number] = {}
+
+            # ✅ Get previous values if they exist, otherwise use defaults
+            min_constraint = constraints.get("min", 0.0)
+            max_constraint = constraints.get("max", 100.0)
+
+            default_min = selected_filters[column_name][rule_number].get("min", min_constraint)
+            default_max = selected_filters[column_name][rule_number].get("max", max_constraint)
+
+            min_key = f"{column_name}_{rule_number}_{index}_min"
+            max_key = f"{column_name}_{rule_number}_{index}_max"
+
+            # ✅ Sidebar UI for constraints (min/max)
+            st.sidebar.subheader(f"{column_name} - {category} ({rule_type})")
+
+            new_min_value = st.sidebar.number_input(
+                f"Min Value for {column_name} ({rule_number})", value=default_min, key=min_key
+            )
+            new_max_value = st.sidebar.number_input(
+                f"Max Value for {column_name} ({rule_number})", value=default_max, key=max_key
+            )
+
+            # ✅ Store updated values in selected_filters
+            selected_filters[column_name][rule_number] = {
+                "min": new_min_value,
+                "max": new_max_value,
                 "format_type": format_type,
                 "rule_type": rule_type,
-                "columns": rule_columns  # ✅ Store columns
             }
 
-# ✅ Process Tick Sizes Separately (Handling `Rule Type`)
-tick_size_constraints = {}
+# ✅ Process Tick Sizes Separately
 if "tickSizes" in rules_config:
+    if "tick_sizes" not in selected_filters:
+        selected_filters["tick_sizes"] = {}
+
     for rule in rules_config["tickSizes"]:
         rule_number = rule.get("rulenumber", "Unknown Rule")
         rule_type = rule.get("type", "Unknown Type")
@@ -285,80 +312,25 @@ if "tickSizes" in rules_config:
         format_type = rule.get("format_type", "Array")
         tick_size = constraints.get("tickSize", None)
 
+        # ✅ Use default value if tick_size exists
+        default_tick_size = selected_filters["tick_sizes"].get(rule_number, {}).get("tickSize", tick_size)
+
+        tick_size_key = f"tick_size_{rule_number}"
+
         # ✅ Sidebar UI for Tick Size
         st.sidebar.subheader(f"📏 Tick Size ({rule_number})")
-        if tick_size is not None:
-            tick_size = st.sidebar.number_input(f"Tick Size ({rule_number})", value=tick_size)
+        new_tick_size = st.sidebar.number_input(f"Tick Size ({rule_number})", value=default_tick_size, key=tick_size_key)
 
-        # ✅ Store Tick Size Constraints
-        tick_size_constraints[rule_number] = {
-            "tickSize": tick_size,
+        # ✅ Store updated Tick Size constraints
+        selected_filters["tick_sizes"][rule_number] = {
+            "tickSize": new_tick_size,
             "format_type": format_type,
             "rule_type": rule_type,
             "columns": rule_columns
         }
 
-# ✅ Apply Filters Automatically Based on Rule Type
-if "results" in st.session_state:
-    df = st.session_state.get("results", pd.DataFrame()).copy()
-
-    if not df.empty:
-        # ✅ Ensure numeric conversion
-        def extract_numeric(value):
-            try:
-                return float(value)
-            except (ValueError, TypeError):
-                return None
-
-        df["Baseline Field Value Numeric"] = df["Baseline Field Value"].apply(extract_numeric)
-        df["Candidate Field Value Numeric"] = df["Candidate Field Value"].apply(extract_numeric)
-
-        # ✅ Compute absolute difference
-        df["Difference"] = abs(df["Baseline Field Value Numeric"] - df["Candidate Field Value Numeric"])
-
-        # ✅ Apply Min/Max Constraints for ALL columns
-        for rule_number, rule_data in selected_constraints.items():
-            min_constraint = rule_data.get("min", None)
-            max_constraint = rule_data.get("max", None)
-            rule_type = rule_data.get("rule_type", "Unknown Type")
-            columns = rule_data.get("columns", [])
-
-            for col in columns:
-                if min_constraint is not None:
-                    df = df[~((df["Column Name"] == col) &
-                              (df["Rule Type"] == rule_type) &
-                              (df["Difference"] < min_constraint))]
-
-                if max_constraint is not None:
-                    df = df[~((df["Column Name"] == col) &
-                              (df["Rule Type"] == rule_type) &
-                              (df["Difference"] > max_constraint))]
-
-        # ✅ Apply Tick Size Filtering ONLY on `tickSizes` column
-        for rule_number, rule_data in tick_size_constraints.items():
-            tick_size = rule_data.get("tickSize", None)
-            rule_type = rule_data.get("rule_type", "Unknown Type")
-            format_type = rule_data.get("format_type", "Array")
-
-            if format_type == "Array" and tick_size is not None and tick_size > 0:
-                df = df[~((df["Column Name"] == "tickSizes") &
-                          (df["Rule Type"] == rule_type) &
-                          ((df["Difference"] % tick_size) != 0))]
-
-                # ✅ Debugging
-                print(f"   ✅ Tick Size Applied for {rule_number}, Column: tickSizes, TickSize: {tick_size}, Rule Type: {rule_type}")
-
-        # ✅ Store updated filtered results dynamically
-        st.session_state["filtered_results"] = df
-
-# ✅ Display Filtered Results
-st.subheader("Filtered Discrepancy Results")
-st.dataframe(st.session_state["filtered_results"])
-
-# ✅ Export Button for Downloading Filtered Data
-if not st.session_state["filtered_results"].empty:
-    csv = st.session_state["filtered_results"].to_csv(index=False).encode("utf-8")
-    st.download_button("Download Filtered Data", csv, "filtered_results.csv", "text/csv")
+# ✅ Store constraints and tick sizes in session state
+st.session_state["selected_filters"] = selected_filters
 
 
 # ✅ Buttons
@@ -373,154 +345,39 @@ if reset_filter_clicked:
 
 # ✅ Apply Filters
 if apply_filter_clicked and "results" in st.session_state:
+    processor = DataProcessor(
+        st.session_state["directory_config_path"],
+        st.session_state["job_response_path"],
+        st.session_state["rules_config_path"]
+    )
 
-    print("\n🔍 [DEBUG] Apply Filter Clicked")
+    # ✅ Get file type
+    file_type = st.session_state["file_type"]
+    uploaded_file_baseline = st.session_state["uploaded_file_baseline"]
+    uploaded_file_candidate = st.session_state["uploaded_file_candidate"]
 
-    # ✅ Get existing discrepancy data
-    df = st.session_state.get("results", pd.DataFrame()).copy()
+    # ✅ Convert uploaded files to `BytesIO`
+    baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
+    candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
 
-    if not df.empty:
-        print(f"🔹 [DEBUG] Initial DataFrame Rows: {len(df)}")
+    # ✅ Reset file pointer before reading (important for Streamlit uploads)
+    baseline_bytes.seek(0)
+    candidate_bytes.seek(0)
 
-        # ✅ Ensure numeric conversion for comparison
-        def extract_numeric(value):
-            try:
-                return float(value)
-            except (ValueError, TypeError):
-                return None
+    # ✅ Read files using `read_file()` from DataProcessor
+    df_baseline = processor.read_file(baseline_bytes, file_type)
+    df_candidate = processor.read_file(candidate_bytes, file_type)
+    # ✅ Apply comparison with filters
+    updated_results = processor.compare_files(
+        df_baseline, df_candidate, file_type, st.session_state.get("selected_filters", {})
+    )
 
-        df["Baseline Field Value Numeric"] = df["Baseline Field Value"].apply(extract_numeric)
-        df["Candidate Field Value Numeric"] = df["Candidate Field Value"].apply(extract_numeric)
+    # ✅ Store results in session state
+    st.session_state["results"] = updated_results
+    st.session_state["filtered_results"] = updated_results
 
-        # ✅ Compute absolute difference
-        df["Difference"] = abs(df["Baseline Field Value Numeric"] - df["Candidate Field Value Numeric"])
-        print("\n🔹 [DEBUG] Computed Difference Column Added\n",
-              df[["Baseline Field Value Numeric", "Candidate Field Value Numeric", "Difference"]].head())
-
-        # ✅ Load `rules_config` from session state
-        rules_config = st.session_state.get("rules_config", {})
-
-        # ✅ Ensure `rules_config` has the required structure
-        if "rules" in rules_config:
-            for category, rules in rules_config["rules"].items():
-                for rule in rules:
-                    rule_number = rule.get("rulenumber", "Unknown Rule")
-                    rule_type = rule.get("type", "Unknown Type")  # ✅ Get Rule Type
-                    constraints = rule.get("constraints", {})
-                    rule_columns = rule.get("columns", [])
-                    format_type = rule.get("format_type", "Simple")
-
-                    min_constraint = constraints.get("min", None)
-                    max_constraint = constraints.get("max", None)
-
-                    print(f"\n🔍 [DEBUG] Processing Rule: {rule_number} ({format_type})")
-                    print(f"🔹 Rule Type: {rule_type}")
-                    print(f"🔹 Columns: {rule_columns}")
-                    print(f"🔹 Old Min: {constraints.get('min', None)}, New Min: {min_constraint}")
-                    print(f"🔹 Old Max: {constraints.get('max', None)}, New Max: {max_constraint}")
-
-                    # ✅ Apply filtering based on format type + Rule Type
-                    for col in rule_columns:
-                        if format_type == "Array":
-                            df = df[~((df["Column Name"].str.contains(col, regex=False)) &
-                                      (df["Rule Type"] == rule_type) &  # ✅ Now filtering with Rule Type
-                                      (df["Difference"] < min_constraint))]
-                            df = df[~((df["Column Name"].str.contains(col, regex=False)) &
-                                      (df["Rule Type"] == rule_type) &  # ✅ Now filtering with Rule Type
-                                      (df["Difference"] > max_constraint))]
-                        else:
-                            if min_constraint is not None:
-                                df = df[~((df["Column Name"] == col) &
-                                          (df["Rule Type"] == rule_type) &  # ✅ Now filtering with Rule Type
-                                          (df["Difference"] < min_constraint))]
-                            if max_constraint is not None:
-                                df = df[~((df["Column Name"] == col) &
-                                          (df["Rule Type"] == rule_type) &  # ✅ Now filtering with Rule Type
-                                          (df["Difference"] > max_constraint))]
-
-        # ✅ Store updated filtered results
-        st.session_state["filtered_results"] = df
-
-        print("\n✅ [DEBUG] Updated Filtered Data:")
-        print(df.head())
-        print(f"\n✅ [DEBUG] Final Filtered Row Count: {len(df)}")
-
-        # ✅ Refresh UI
-        st.rerun()
-
-
-
-# ✅ Display Filtered Results
-
-
-
-# **📤 Export Button**
-filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
-
-if not filtered_results.empty:
-    st.header("📊 Updated Discrepancy Analysis")
-    st.dataframe(filtered_results)
-job_response_path = st.session_state["job_response_path"]
-export_format = "CSV"  # Default file format
-
-if job_response_path and os.path.exists(job_response_path):
-    try:
-        with open(job_response_path, "r") as f:
-            job_response = json.load(f)
-            export_format = job_response.get("report", {}).get("format", "CSV").upper()
-    except Exception as e:
-        st.error(f"Error loading job response file: {str(e)}")
-        job_response = None
-else:
-    job_response = None
-
-if not filtered_results.empty and job_response:
-    # ✅ Generate Filename Using Job Response Data
-    baseline_env = job_response["baseline"]["env"]
-    candidate_env = job_response["candidate"]["env"]
-    baseline_label = job_response["baseline"]["label"]
-    candidate_label = job_response["candidate"]["label"]
-
-    filename = f"discrepancy_report_{baseline_env}_{candidate_env}_{baseline_label}_{candidate_label}"
-
-    # ✅ Export Data Based on Format
-    export_data = None
-    mime_type = "text/plain"
-
-    if export_format == "CSV":
-        export_data = filtered_results.to_csv(index=False).encode("utf-8")
-        filename += ".csv"
-        mime_type = "text/csv"
-
-    elif export_format == "EXCEL":
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            filtered_results.to_excel(writer, index=False, sheet_name="Discrepancies")
-        export_data = output.getvalue()
-        filename += ".xlsx"
-        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-    elif export_format == "JSON":
-        export_data = filtered_results.to_json(orient="records", indent=4).encode("utf-8")
-        filename += ".json"
-        mime_type = "application/json"
-
-    elif export_format == "TEXT":
-        export_data = filtered_results.to_string(index=False).encode("utf-8")
-        filename += ".txt"
-        mime_type = "text/plain"
-
-    if export_data:
-        st.download_button(
-            label="📥 Download Report",
-            data=export_data,
-            file_name=filename,
-            mime=mime_type
-        )
-    else:
-        st.warning("Unsupported export format. Defaulting to CSV.")
-
-
+    # ✅ Refresh UI
+    st.rerun()
 
 # ✅ Display Results
 filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
