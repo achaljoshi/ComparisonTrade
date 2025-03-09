@@ -3,32 +3,80 @@ import os
 import re
 from io import BytesIO
 from pathlib import Path
-from typing import Generator, Union
+from typing import Generator, Union, Dict, Any
 import pandas as pd
+import logging
 
 
 class DataProcessor:
     def __init__(self, directory_config, job_response, rules_config):
-        """Initialize with file paths or direct dictionary data."""
-
-        # ✅ Handle if config is a file path or a dictionary
+        """Initialize with file paths or direct dictionary data.
+        
+        Args:
+            directory_config: Either a file path or a dictionary containing directory configuration
+            job_response: Either a file path or a dictionary containing job response data
+            rules_config: Either a file path or a dictionary containing rules configuration
+        """
+        # Handle directory config
         if isinstance(directory_config, str) and os.path.exists(directory_config):
             with open(directory_config, "r") as file:
                 self.directory_config = json.load(file)
+        elif isinstance(directory_config, dict):
+            self.directory_config = directory_config
         else:
-            self.directory_config = directory_config  # Assume it's already a dictionary
+            raise ValueError("directory_config must be either a valid file path or a dictionary")
 
+        # Handle job response
         if isinstance(job_response, str) and os.path.exists(job_response):
             with open(job_response, "r") as file:
                 self.job_response = json.load(file)
+        elif isinstance(job_response, dict):
+            self.job_response = job_response
         else:
-            self.job_response = job_response  # Assume it's already a dictionary
+            raise ValueError("job_response must be either a valid file path or a dictionary")
 
+        # Handle rules config
         if isinstance(rules_config, str) and os.path.exists(rules_config):
             with open(rules_config, "r") as file:
                 self.rules_config = json.load(file)
+        elif isinstance(rules_config, dict):
+            self.rules_config = rules_config
         else:
-            self.rules_config = rules_config  # Assume it's already a dictionary
+            raise ValueError("rules_config must be either a valid file path or a dictionary")
+
+        # Initialize other attributes
+        self._initialize_attributes()
+
+    def _initialize_attributes(self):
+        """Initialize additional attributes needed for data processing."""
+        try:
+            # Validate rules configuration
+            if not isinstance(self.rules_config, dict):
+                raise ValueError("rules_config must be a dictionary")
+            
+            if "rules" not in self.rules_config:
+                raise ValueError("rules_config must contain a 'rules' key")
+            
+            if "identifier" not in self.rules_config:
+                raise ValueError("rules_config must contain an 'identifier' key")
+            
+            # Initialize processing attributes
+            self.key_column = self.rules_config["identifier"]
+            self.rules = self.rules_config["rules"]
+            
+            # Initialize filter-related attributes
+            self.filter_metadata = None
+            self.processed_filters = {}
+            
+            # Initialize comparison attributes
+            self.comparison_results = None
+            self.discrepancies = []
+            
+            logging.debug("DataProcessor attributes initialized successfully")
+            
+        except Exception as e:
+            logging.error(f"Error initializing DataProcessor attributes: {str(e)}")
+            raise
 
     def run_comparison(
         self, baseline_file, candidate_file, file_type="Excel", filters=None
@@ -442,16 +490,19 @@ class DataProcessor:
         )
 
         if array_rule_key:
+            # Pass filters to get_arrays_rules
             updated_discrepancies = self.get_arrays_rules(
-                df_merged, discrepancies, key_column, array_rule_key
+                df_merged, discrepancies, key_column, array_rule_key, filters
             )
+        else:
+            updated_discrepancies = discrepancies
 
         # ✅ For handling normal objects
-        updated_discrepancies = self.extract_discrepancy(df_merged, discrepancies, filters, key_column)
+        updated_discrepancies = self.extract_discrepancy(df_merged, updated_discrepancies, filters, key_column)
 
         # ✅ Include Missing Rows
-        updated_discrepancies = self.missing_row_candidate(discrepancies, extra_rows_baseline, key_column)
-        updated_discrepancies = self.missing_row_baseline(discrepancies, extra_rows_candidate, key_column)
+        updated_discrepancies = self.missing_row_candidate(updated_discrepancies, extra_rows_baseline, key_column)
+        updated_discrepancies = self.missing_row_baseline(updated_discrepancies, extra_rows_candidate, key_column)
 
         discrepancies_df = pd.DataFrame(updated_discrepancies)
         discrepancies_df = discrepancies_df.astype(str)
@@ -465,7 +516,7 @@ class DataProcessor:
         )
         raise ValueError(f"Key identifier '{key_column}' not found in dataset.")
 
-    def get_arrays_rules(self, df_merged, discrepancies, key_column, array_rule_key):
+    def get_arrays_rules(self, df_merged, discrepancies, key_column, array_rule_key, filters):
         array_rules = self.rules_config["rules"].get(array_rule_key, [])
         # ✅ Dynamically extract sub-columns from rules_config.json
         sub_columns = next(
@@ -488,6 +539,7 @@ class DataProcessor:
             sub_columns,
             array_rule_key,
             array_rules,
+            filters
         )
         return discrepancies
 
@@ -536,19 +588,6 @@ class DataProcessor:
                 rule_description = rule.get("description", "No description available")
 
                 for col in rule.get("columns", []):
-
-                    pattern = re.compile(r"{col}\[\d+\]")
-
-                    if any(pattern.fullmatch(col) for col in df_merged.columns):
-                        print("Columns matching 'arrays[N]' pattern exist")
-                    else:
-                        print("No matching columns found")
-
-                    matching_columns = [
-                        col for col in df_merged.columns if pattern.fullmatch(col)
-                    ]
-                    print("Matching Columns:", matching_columns)
-
                     col_baseline = f"{col}_baseline"
                     col_candidate = f"{col}_candidate"
 
@@ -556,14 +595,23 @@ class DataProcessor:
                         col_baseline in df_merged.columns
                         and col_candidate in df_merged.columns
                     ):
-                        updated_constraint_min = filters.get(rule_number, {}).get(
-                            "constraints_min",
-                            rule.get("constraints", {}).get("min", float("inf")),
+                        # Get filter values from the correct nested structure
+                        filter_values = {}
+                        if filters and "columns" in filters and column_name in filters["columns"]:
+                            filter_values = filters["columns"].get(column_name, {}).get(rule_number, {})
+                        
+                        # Use filter values if available, otherwise use defaults from rule
+                        updated_constraint_min = filter_values.get(
+                            "min",
+                            rule.get("constraints", {}).get("min", float("-inf")),
                         )
-                        updated_constraint_max = filters.get(rule_number, {}).get(
-                            "constraints_max",
+                        updated_constraint_max = filter_values.get(
+                            "max",
                             rule.get("constraints", {}).get("max", float("inf")),
                         )
+
+                        # Log the filter values being used
+                        logging.debug(f"Using filter values for {column_name}.{rule_number}: min={updated_constraint_min}, max={updated_constraint_max}")
 
                         if "constraints" in rule:
                             df_merged["rule_violation"] = abs(
@@ -598,6 +646,7 @@ class DataProcessor:
                             col_baseline,
                             col_candidate,
                         )
+
         return discrepancies
 
     def final_discrepancy_list(
@@ -636,14 +685,34 @@ class DataProcessor:
         min_arrays,
         sub_columns,
         array_rule_key,
-        array_rules,):
+        array_rules,
+        filters
+    ):
         for rule in array_rules:
             rule_number = rule.get("rulenumber", "N/A")
             rule_type = rule.get("type", "Unknown")
             rule_description = rule.get("description", "No description available")
+            
+            # Get filter values from the correct nested structure
+            filter_values = {}
+            if filters and "array_fields" in filters and array_rule_key in filters["array_fields"]:
+                for rule_filter in filters["array_fields"][array_rule_key]["rules"]:
+                    if rule_filter.get("rule_number") == rule_number:
+                        filter_values = rule_filter
+                        break
+            
+            # Use filter values if available, otherwise use defaults from rule
+            min_threshold = filter_values.get("min", rule.get("constraints", {}).get("min", float("-inf")))
+            max_threshold = filter_values.get("max", rule.get("constraints", {}).get("max", float("inf")))
+            
+            # Log the filter values being used
+            logging.debug(f"Using array filter values for {array_rule_key}.{rule_number}: min={min_threshold}, max={max_threshold}")
+            
             if "constraints" in rule:
-                min_arrays = rule["constraints"].get("min", min_arrays)
-                max_arrays = rule["constraints"].get("max", max_arrays)
+                # Use filter values if available
+                min_arrays = float(min_threshold) if min_threshold is not None else rule["constraints"].get("min", min_arrays)
+                max_arrays = float(max_threshold) if max_threshold is not None else rule["constraints"].get("max", max_arrays)
+            
             if "valid_values" in rule:
                 predefined_values = set(rule["valid_values"])
 
@@ -813,7 +882,156 @@ class DataProcessor:
             )
         return discrepancies
 
-    def _extracted_discrepancy_classification(self, rule, df_merged, arg2, arg3):
-        df_merged.loc[df_merged["rule_violation"] <= arg2, "classification"] = rule.get("classification", {}).get("min")
-        df_merged.loc[df_merged["rule_violation"] >= arg3, "classification"] = rule.get("classification", {}).get("max")
-        df_merged.loc[(df_merged["rule_violation"] > arg2) & (df_merged["rule_violation"] < arg3), "classification",] = rule.get("classification", {}).get("min_max")
+    def _extracted_discrepancy_classification(self, rule, df_merged, min_threshold, max_threshold):
+        """Classify discrepancies based on rule violation thresholds.
+        
+        Args:
+            rule (dict): The rule containing classification criteria
+            df_merged (pd.DataFrame): The merged dataframe with rule violations
+            min_threshold (float): Minimum threshold for rule violation
+            max_threshold (float): Maximum threshold for rule violation
+        """
+        classifications = rule.get("classification", {})
+        
+        # Apply classifications based on thresholds
+        df_merged.loc[
+            df_merged["rule_violation"] <= min_threshold, 
+            "classification"
+        ] = classifications.get("min", "BELOW_THRESHOLD")
+        
+        df_merged.loc[
+            df_merged["rule_violation"] >= max_threshold, 
+            "classification"
+        ] = classifications.get("max", "ABOVE_THRESHOLD")
+        
+        df_merged.loc[
+            (df_merged["rule_violation"] > min_threshold) & 
+            (df_merged["rule_violation"] < max_threshold), 
+            "classification"
+        ] = classifications.get("min_max", "WITHIN_THRESHOLD")
+
+    def get_filter_metadata(self) -> Dict[str, Any]:
+        """Get metadata about available filters from rules configuration.
+        
+        Returns:
+            Dictionary containing filter metadata for constraint-based rules only
+        """
+        metadata = {
+            "columns": {},
+            "array_fields": {}
+        }
+        
+        try:
+            rules_config = self.rules_config
+                
+            for field_name, field_rules in rules_config.get("rules", {}).items():
+                for rule in field_rules:
+                    rule_number = rule.get("rulenumber", "")
+                    constraints = rule.get("constraints", {})
+                    
+                    # Only include rules that have constraints
+                    if constraints:
+                        if field_name not in metadata["columns"]:
+                            metadata["columns"][field_name] = []
+                            
+                        metadata["columns"][field_name].append({
+                            "rule_number": rule_number,
+                            "rule_type": rule.get("type", ""),
+                            "description": rule.get("description", ""),
+                            "constraints": constraints,
+                            "classification": rule.get("classification", {})
+                        })
+                        
+                    # Handle array fields with constraints
+                    if rule.get("format_type") == "Array" and constraints:
+                        if field_name not in metadata["array_fields"]:
+                            metadata["array_fields"][field_name] = {
+                                "nested_identifier": rule.get("nested_identifier", []),
+                                "rules": []
+                            }
+                        metadata["array_fields"][field_name]["rules"].append({
+                            "rule_number": rule_number,
+                            "constraints": constraints,
+                            "classification": rule.get("classification", {})
+                        })
+                        
+            return metadata
+            
+        except Exception as e:
+            logging.error(f"Error getting filter metadata: {str(e)}")
+            return metadata
+
+    def process_filters(self, selected_filters=None) -> Dict[str, Any]:
+        """Process and validate filter settings.
+        
+        Args:
+            selected_filters: Dictionary of selected filter values
+            
+        Returns:
+            Dictionary of processed filters
+        """
+        if not selected_filters:
+            return {}
+        
+        processed_filters = {
+            "columns": {},
+            "array_fields": {}
+        }
+        
+        try:
+            # Process column filters
+            for column_name, rules in selected_filters.get("columns", {}).items():
+                processed_filters["columns"][column_name] = {}
+                for rule_number, rule_data in rules.items():
+                    processed_filters["columns"][column_name][rule_number] = {
+                        "min": float(rule_data.get("min", 0)) if rule_data.get("min") is not None else float("-inf"),
+                        "max": float(rule_data.get("max", float('inf'))) if rule_data.get("max") is not None else float("inf"),
+                        "format_type": rule_data.get("format_type", ""),
+                        "rule_type": rule_data.get("rule_type", "")
+                    }
+            
+            # Process array field filters
+            for field_name, field_data in selected_filters.get("array_fields", {}).items():
+                processed_filters["array_fields"][field_name] = {
+                    "nested_identifier": field_data.get("nested_identifier", []),
+                    "rules": []
+                }
+                
+                for rule in field_data.get("rules", []):
+                    processed_rule = {
+                        "rule_number": rule.get("rule_number", ""),
+                        "rule_type": rule.get("rule_type", "")
+                    }
+                    
+                    # Process min/max values
+                    if "min" in rule:
+                        try:
+                            processed_rule["min"] = float(rule["min"])
+                        except (ValueError, TypeError):
+                            processed_rule["min"] = float("-inf")
+                    else:
+                        processed_rule["min"] = float("-inf")
+                        
+                    if "max" in rule:
+                        try:
+                            processed_rule["max"] = float(rule["max"])
+                        except (ValueError, TypeError):
+                            processed_rule["max"] = float("inf")
+                    else:
+                        processed_rule["max"] = float("inf")
+                    
+                    # Add any other constraint keys
+                    for key, value in rule.items():
+                        if key not in ["rule_number", "rule_type", "min", "max"]:
+                            processed_rule[key] = value
+                    
+                    processed_filters["array_fields"][field_name]["rules"].append(processed_rule)
+            
+            # Log the processed filters
+            logging.debug(f"Processed filters: {processed_filters}")
+                    
+            return processed_filters
+            
+        except Exception as e:
+            logging.error(f"Error processing filters: {str(e)}")
+            return {}

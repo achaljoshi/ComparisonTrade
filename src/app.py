@@ -13,6 +13,8 @@ import logging
 import hashlib
 import uuid
 import re
+from utils.ui_helpers import UIHelper
+from utils.file_handler import FileHandler
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -38,12 +40,13 @@ if st.sidebar.button("🔄 Clear Cache & Restart", key="restart_button"):
 # ✅ Ensure session state variables persist
 if "screen" not in st.session_state:
     st.session_state["screen"] = "upload_config"
-if "directory_config_path" not in st.session_state:
-    st.session_state["directory_config_path"] = None
-if "job_response_path" not in st.session_state:
-    st.session_state["job_response_path"] = None
-if "rules_config_path" not in st.session_state:
-    st.session_state["rules_config_path"] = None
+if "config_files" not in st.session_state:
+    st.session_state["config_files"] = {
+        "directory_config": None,
+        "job_response": None,
+        "rules_config": None,
+        "uploaded_configs": {}  # Store uploaded file contents
+    }
 if "selected_filters" not in st.session_state:
     st.session_state["selected_filters"] = {}
 if "filtered_results" not in st.session_state:
@@ -51,9 +54,16 @@ if "filtered_results" not in st.session_state:
 
 # ✅ Define required config files before using them
 required_files = {
-    "directory_config.json": "directory_config_path",
-    "job_creation_response.json": "job_response_path",
-    "rules_config.json": "rules_config_path"
+    "directory_config.json": "directory_config",
+    "job_creation_response.json": "job_response",
+    "rules_config.json": "rules_config"
+}
+
+# File type mapping
+FILE_TYPE_MAPPING = {
+    "Excel (.xlsx)": "Excel",
+    "DD (.txt)": "DD",
+    "Flat Files (.txt, .csv, .json, .log)": "Text"
 }
 
 def extract_numeric(value):
@@ -62,383 +72,276 @@ def extract_numeric(value):
         return float(match.group()) if match else None
     return value
 
+def main():
+    """Main application entry point."""
+    UIHelper.initialize_session_state()
+    
+    # Initialize file handler
+    file_handler = FileHandler()
+    
+    # Handle different screens
+    if st.session_state["screen"] == "upload_config":
+        handle_config_upload(file_handler)
+    elif st.session_state["screen"] == "file_type_selection":
+        handle_file_type_selection()
+    elif st.session_state["screen"] == "file_selection":
+        handle_file_selection(file_handler)
+        # Only show filters and results if we have processed results
+        if "results" in st.session_state and not st.session_state["filtered_results"].empty:
+            handle_filters_and_results()
+    
+    # Cleanup button
+    if st.button("🗑️ Cleanup Temporary Files"):
+        success, message = file_handler.cleanup()
+        if success:
+            st.success(message)
+        else:
+            st.error(message)
 
-# ✅ Step 1: Upload Configuration Files
-if st.session_state["screen"] == "upload_config":
+def handle_config_upload(file_handler: FileHandler):
+    """Handle configuration file upload screen."""
     st.title("Upload Configuration Files")
-
-    missing_files = {}
-    if not st.session_state.get("directory_config_path"):
-        missing_files["directory_config.json"] = "directory_config.json"
-    if not st.session_state.get("job_response_path"):
-        missing_files["job_creation_response.json"] = "job_creation_response.json"
-    if not st.session_state.get("rules_config_path"):
-        missing_files["rules_config.json"] = "rules_config.json"
-
-    uploaded_files = {}
-
-    temp_dir = tempfile.mkdtemp()
-    def file_upload():
-        global f, e
-        for file_name, key in missing_files.items():
-            uploaded_file = st.file_uploader(f"Upload `{file_name}`", type=["json"], key=key)
-
-            if uploaded_file is not None:
-                save_path = os.path.join(temp_dir, file_name)  # ✅ Save in a unique temp directory
-
-                try:
-                    # ✅ Ensure safe file writing (avoids permission errors)
-                    with open(save_path, "wb") as f:
-                        shutil.copyfileobj(uploaded_file, f)  # ✅ Efficient way to copy file content
-
-                    uploaded_files[key] = save_path  # ✅ Store path in dictionary
-                    st.success(f"`{file_name}` uploaded successfully!")
-
-                except Exception as e:
-                    st.error(f"❌ Error saving `{file_name}`: {e}")
-
-    file_upload()
-
-    # ✅ Debugging: Display uploaded file paths (for verification)
-    # st.write("Uploaded file paths:", uploaded_files)
-
-    # ✅ Update session state only if all files are uploaded
-    if len(uploaded_files) == len(missing_files):
-        st.session_state["directory_config_path"] = uploaded_files.get("directory_config.json", st.session_state.get("directory_config_path"))
-        st.session_state["job_response_path"] = uploaded_files.get("job_creation_response.json", st.session_state.get("job_response_path"))
-        st.session_state["rules_config_path"] = uploaded_files.get("rules_config.json", st.session_state.get("rules_config_path"))
-
-        st.success("✅ Configuration files uploaded successfully! Click 'Next' to proceed.")
+    
+    # Identify missing files
+    missing_files = {
+        filename: config_key
+        for filename, config_key in required_files.items()
+        if not st.session_state["config_files"]["uploaded_configs"].get(config_key)
+    }
+    
+    if not missing_files:
+        if st.button("Next"):
+            st.session_state["screen"] = "file_type_selection"
+            st.rerun()
+        return
+    
+    # Handle file uploads
+    for filename, config_key in missing_files.items():
+        st.write(f"Please upload {filename}")
+        uploaded_file = st.file_uploader(
+            f"Upload {filename}",
+            type=["json"],
+            key=f"upload_{config_key}"
+        )
+        
+        if uploaded_file:
+            try:
+                # Read the uploaded file content
+                content = json.load(uploaded_file)
+                # Store the content in session state
+                st.session_state["config_files"]["uploaded_configs"][config_key] = content
+                st.success(f"✅ {filename} uploaded successfully!")
+            except Exception as e:
+                st.error(f"Error processing {filename}: {str(e)}")
+                logging.error(f"Error processing {filename}: {str(e)}")
+    
+    # Check if all files are uploaded
+    all_uploaded = all(
+        st.session_state["config_files"]["uploaded_configs"].get(config_key) is not None
+        for config_key in [v for k, v in required_files.items()]
+    )
+    
+    if all_uploaded:
+        st.success("✅ All configuration files uploaded successfully! Click 'Next' to proceed.")
         
         if st.button("Next"):
             st.session_state["screen"] = "file_type_selection"
-            st.rerun()  # ✅ Refresh UI to move to the next step
+            st.rerun()
 
-    st.stop()
-
-# ✅ Cleanup function: Delete temp files & folder
-if st.button("🗑️ Cleanup Temporary Files"):
-    def cleanup_temp_files():
-        try:
-            for file_path in uploaded_files.values():
-                if os.path.exists(file_path):
-                    os.remove(file_path)  # ✅ Delete individual temp files
-            
-            shutil.rmtree(temp_dir)  # ✅ Remove the entire temp directory
-            st.success("Temporary files cleaned up successfully!")
-
-        except Exception as e:
-            st.error(f"❌ Error during cleanup: {e}")
-    cleanup_temp_files()
-
-# ✅ Step 2: Select File Type
-if st.session_state["screen"] == "file_type_selection":
+def handle_file_type_selection():
+    """Handle file type selection screen."""
     st.title("Select File Type for Comparison")
-
-    # File type selection from UI
-    file_type = st.radio("Choose the file type:", ["DD (.txt)", "Excel (.xlsx)",  "Flat Files (.txt, .csv, .json, .log)"])
-
-    # Mapping UI file type selection to simplified values
-    file_type_mapping = {
-        "Excel (.xlsx)": "Excel",
-        "DD (.txt)": "DD",
-        "Flat Files (.txt, .csv, .json, .log)": "Text"
-    }
-
+    
+    file_type = st.radio(
+        "Choose the file type:",
+        list(FILE_TYPE_MAPPING.keys())
+    )
+    
     if st.button("Next", key="next_button_file_type"):
-        # Store the mapped file type for consistent internal processing
-        st.session_state["file_type"] = file_type_mapping[file_type]
+        st.session_state["file_type"] = FILE_TYPE_MAPPING[file_type]
         st.session_state["screen"] = "file_selection"
         st.rerun()
 
-    st.stop()
-
-# ✅ Step 3: Upload Files for Comparison
-if st.session_state["screen"] == "file_selection":
+def handle_file_selection(file_handler: FileHandler):
+    """Handle file selection and comparison screen."""
     st.title("Upload Files for Comparison")
-
+    
+    # Show the currently selected file type
+    st.info(f"Selected file type: {st.session_state['file_type']}")
+    
+    # Show allowed extensions based on file type
+    allowed_extensions = {
+        "Excel": ".xlsx, .xls",
+        "DD": ".txt, .dat",
+        "Text": ".txt, .csv, .json, .log"
+    }
+    st.write(f"Allowed file extensions: {allowed_extensions[st.session_state['file_type']]}")
+    
     uploaded_file_baseline = st.file_uploader(
-        "Upload Baseline File", type=["xlsx", "txt", "csv", "json", "log"], key="baseline_file"
+        "Upload Baseline File",
+        type=["xlsx", "xls", "txt", "csv", "json", "log", "dat"],
+        key="baseline_file"
     )
     uploaded_file_candidate = st.file_uploader(
-        "Upload Candidate File", type=["xlsx", "txt", "csv", "json", "log"], key="candidate_file"
+        "Upload Candidate File",
+        type=["xlsx", "xls", "txt", "csv", "json", "log", "dat"],
+        key="candidate_file"
     )
-
+    
     if st.button("Run Comparison", key="run_comparison_button") and (uploaded_file_baseline and uploaded_file_candidate):
         try:
-            # ✅ Initialize Data Processor
+            # Initialize processor with uploaded configs
+            configs = st.session_state["config_files"]["uploaded_configs"]
             processor = DataProcessor(
-                st.session_state["directory_config_path"],
-                st.session_state["job_response_path"],
-                st.session_state["rules_config_path"]
+                configs["directory_config"],
+                configs["job_response"],
+                configs["rules_config"]
             )
-    
-            file_type = st.session_state["file_type"]
-            def detect_file_type(file):
-                filename = file.name.lower()
-                if filename.endswith(".xlsx") or filename.endswith(".xls") and file_type == "Excel":
-                    return "Excel"
-                elif filename.endswith(".txt") and file_type == "DD":
-                    return "DD"
-                elif filename.endswith(".txt") and file_type == "Text":
-                    return "TEXT"
-                elif filename.endswith(".csv") and file_type == "Text":
-                    return "CSV"
-                elif filename.endswith(".json") and file_type == "Text":
-                    return "JSON"
-                elif filename.endswith(".log") and file_type == "Text":
-                    return "LOG"
-                else:
-                    raise ValueError("Unsupported file format.")
-    
-            file_type = detect_file_type(uploaded_file_baseline)
-            st.session_state["file_type"] = file_type  # ✅ Ensure file type is set in session
-    
-            # ✅ Convert uploaded files to `BytesIO`
-            baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
-            candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
-    
-            # ✅ Reset file pointer before reading (important for Streamlit uploads)
-            baseline_bytes.seek(0)
-            candidate_bytes.seek(0)
-    
-            # ✅ Read files using `read_file()` from DataProcessor
+            
+            # Store processor in session state
+            st.session_state["processor"] = processor
+            
+            # Detect file type and prepare files
+            try:
+                file_type = file_handler.detect_file_type(uploaded_file_baseline, st.session_state["file_type"])
+                # Verify both files are of the same type
+                candidate_type = file_handler.detect_file_type(uploaded_file_candidate, st.session_state["file_type"])
+                if file_type != candidate_type:
+                    st.error(f"File type mismatch: Baseline is {file_type}, Candidate is {candidate_type}")
+                    return
+            except ValueError as e:
+                st.error(f"File type error: {str(e)}")
+                return
+            
+            baseline_bytes = file_handler.prepare_file_for_processing(uploaded_file_baseline)
+            candidate_bytes = file_handler.prepare_file_for_processing(uploaded_file_candidate)
+            
+            # Process files
             df_baseline = processor.read_file(baseline_bytes, file_type)
             df_candidate = processor.read_file(candidate_bytes, file_type)
-    
-            # ✅ Debugging: Display sample data
-            st.write("✅ Uploaded files successfully converted to DataFrames.")
-            print("✅ Baseline DataFrame:\n", df_baseline.head())
-            print("✅ Candidate DataFrame:\n", df_candidate.head())
-    
-            # ✅ Ensure files are not empty
+            
             if df_baseline.empty or df_candidate.empty:
                 st.error("One of the uploaded files is empty. Please check your data.")
-                st.stop()
-    
-            # ✅ Run Comparison
+                return
+            
+            # Run comparison
             results = processor.compare_files(df_baseline, df_candidate, file_type)
-            st.success("✅Apply Comparison Completed! Discrepancy report generated.")
-    
-            # ✅ Store results in session state
-            st.session_state["results"] = results
-            st.session_state["filtered_results"] = results
-            st.session_state["uploaded_file_baseline"] = uploaded_file_baseline
-            st.session_state["uploaded_file_candidate"] = uploaded_file_candidate
-    
+            
+            if results is None or results.empty:
+                st.error("No comparison results generated. Please check your input files and configuration.")
+                return
+            
+            # Store results and files in session state
+            st.session_state.update({
+                "results": results,
+                "filtered_results": results,
+                "uploaded_file_baseline": uploaded_file_baseline,
+                "uploaded_file_candidate": uploaded_file_candidate,
+                "file_type": file_type
+            })
+            
+            st.success("✅ Comparison completed! Discrepancy report generated.")
+            st.rerun()  # Rerun to show filters and results
+            
         except Exception as e:
             st.error(f"Error processing files: {str(e)}")
+            logging.error(f"Error processing files: {str(e)}", exc_info=True)
+            # Clear processor if initialization failed
+            if "processor" in st.session_state:
+                del st.session_state["processor"]
 
-# ✅ Load `rules_config.json`
-rules_config_path = st.session_state.get("rules_config_path", None)
+def handle_filters_and_results():
+    """Handle filter UI and results display."""
+    if "processor" not in st.session_state:
+        return
+        
+    try:
+        # Get filter metadata and render filter UI
+        filter_metadata = st.session_state["processor"].get_filter_metadata()
+        if not filter_metadata:
+            st.warning("No filter metadata available. Please check your rules configuration.")
+            return
+            
+        selected_filters = UIHelper.render_filter_ui(filter_metadata)
+        
+        # Store updated filters
+        st.session_state["selected_filters"] = selected_filters
+        
+        # Handle filter buttons
+        apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
+        reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
+        
+        if reset_filter_clicked:
+            st.session_state["selected_filters"] = {}
+            st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
+            st.rerun()
+        
+        if apply_filter_clicked and "results" in st.session_state:
+            apply_filters()
+        
+        # Display results
+        UIHelper.render_results(st.session_state.get("filtered_results", pd.DataFrame()))
+        
+    except Exception as e:
+        st.error(f"Error handling filters and results: {str(e)}")
+        logging.error(f"Error handling filters and results: {str(e)}", exc_info=True)
 
-if rules_config_path and os.path.exists(rules_config_path):
-    with open(rules_config_path, "r") as f:
-        rules_config = json.load(f)
-        st.session_state["rules_config"] = rules_config  # ✅ Store in session state
-        print("\n✅ [DEBUG] Reloaded `rules_config.json` from disk\n")
-else:
-    print("🚨 [ERROR] `rules_config.json` file not found or path is incorrect!")
+def apply_filters():
+    """Apply filters to the results."""
+    try:
+        processor = st.session_state["processor"]
+        
+        # Process the selected filters
+        processed_filters = processor.process_filters(st.session_state["selected_filters"])
+        
+        # Log the processed filters for debugging
+        logging.debug(f"Processed filters: {processed_filters}")
+        
+        # Get files and process
+        file_type = st.session_state["file_type"]
+        baseline_file = st.session_state["uploaded_file_baseline"]
+        candidate_file = st.session_state["uploaded_file_candidate"]
+        
+        if not all([baseline_file, candidate_file]):
+            st.error("Missing comparison files. Please upload both baseline and candidate files.")
+            return
+        
+        # Process files
+        file_handler = FileHandler()
+        baseline_bytes = file_handler.prepare_file_for_processing(baseline_file)
+        candidate_bytes = file_handler.prepare_file_for_processing(candidate_file)
+        
+        df_baseline = processor.read_file(baseline_bytes, file_type)
+        df_candidate = processor.read_file(candidate_bytes, file_type)
+        
+        if df_baseline.empty or df_candidate.empty:
+            st.error("One of the files is empty after processing. Please check your data.")
+            return
+        
+        # Apply comparison with processed filters
+        updated_results = processor.compare_files(
+            df_baseline,
+            df_candidate,
+            file_type,
+            processed_filters
+        )
+        
+        if updated_results is None or updated_results.empty:
+            st.error("No results after applying filters. Please check your filter settings.")
+            return
+            
+        # Update results
+        st.session_state["filtered_results"] = updated_results
+        
+        # Show success message
+        st.sidebar.success("Filters applied successfully!")
+        
+        # Rerun to update the UI
+        st.rerun()
+        
+    except Exception as e:
+        st.error(f"Error applying filters: {str(e)}")
+        logging.error(f"Error applying filters: {str(e)}", exc_info=True)
 
-# ✅ Sidebar: Dynamic Filters
-# ✅ Sidebar: Dynamic Filters
-st.sidebar.header("🔍 Filter Rules")
-
-# ✅ Ensure `rules_config` exists in session
-rules_config = st.session_state.get("rules_config", {})
-
-# ✅ Retrieve existing selected_filters or initialize a new structure
-selected_filters = st.session_state.get("selected_filters", {})
-
-# ✅ Process Normal Rules
-if "rules" in rules_config:
-    for column_name, rules in rules_config["rules"].items():
-        for index, rule in enumerate(rules):
-            if not isinstance(rule, dict):
-                continue
-
-            rule_number = rule.get("rulenumber", "Unknown Rule")
-            rule_type = rule.get("type", "Unknown Type")
-            category = rule.get("category", "General")
-            constraints = rule.get("constraints", {})
-            format_type = rule.get("format_type", "Simple")
-
-            # ✅ Ensure the column_name entry exists in selected_filters
-            if column_name not in selected_filters:
-                selected_filters[column_name] = {}
-
-            # ✅ Ensure the rule_number entry exists in selected_filters
-            if rule_number not in selected_filters[column_name]:
-                selected_filters[column_name][rule_number] = {}
-
-            # ✅ Get previous values if they exist, otherwise use defaults
-            min_constraint = constraints.get("min", 0.0)
-            max_constraint = constraints.get("max", 100.0)
-
-            default_min = selected_filters[column_name][rule_number].get("min", min_constraint)
-            default_max = selected_filters[column_name][rule_number].get("max", max_constraint)
-
-            min_key = f"{column_name}_{rule_number}_{index}_min"
-            max_key = f"{column_name}_{rule_number}_{index}_max"
-
-            # ✅ Sidebar UI for constraints (min/max)
-            st.sidebar.subheader(f"{column_name} - {category} ({rule_type})")
-
-            new_min_value = st.sidebar.number_input(
-                f"Min Value for {column_name} ({rule_number})", value=default_min, key=min_key
-            )
-            new_max_value = st.sidebar.number_input(
-                f"Max Value for {column_name} ({rule_number})", value=default_max, key=max_key
-            )
-
-            # ✅ Store updated values in selected_filters
-            selected_filters[column_name][rule_number] = {
-                "min": new_min_value,
-                "max": new_max_value,
-                "format_type": format_type,
-                "rule_type": rule_type,
-            }
-
-# ✅ Process Tick Sizes Separately
-if "tickSizes" in rules_config:
-    if "tick_sizes" not in selected_filters:
-        selected_filters["tick_sizes"] = {}
-
-    for rule in rules_config["tickSizes"]:
-        rule_number = rule.get("rulenumber", "Unknown Rule")
-        rule_type = rule.get("type", "Unknown Type")
-        rule_columns = rule.get("columns", [])
-        constraints = rule.get("constraints", {})
-        format_type = rule.get("format_type", "Array")
-        tick_size = constraints.get("tickSize", None)
-
-        # ✅ Use default value if tick_size exists
-        default_tick_size = selected_filters["tick_sizes"].get(rule_number, {}).get("tickSize", tick_size)
-
-        tick_size_key = f"tick_size_{rule_number}"
-
-        # ✅ Sidebar UI for Tick Size
-        st.sidebar.subheader(f"📏 Tick Size ({rule_number})")
-        new_tick_size = st.sidebar.number_input(f"Tick Size ({rule_number})", value=default_tick_size, key=tick_size_key)
-
-        # ✅ Store updated Tick Size constraints
-        selected_filters["tick_sizes"][rule_number] = {
-            "tickSize": new_tick_size,
-            "format_type": format_type,
-            "rule_type": rule_type,
-            "columns": rule_columns
-        }
-
-# ✅ Store constraints and tick sizes in session state
-st.session_state["selected_filters"] = selected_filters
-
-
-# ✅ Buttons
-apply_filter_clicked = st.sidebar.button("📌 Apply Filter", key="apply_filter_button")
-reset_filter_clicked = st.sidebar.button("♻️ Reset Filters", key="reset_filter_button")
-
-# ✅ Reset Filters
-if reset_filter_clicked:
-    st.session_state["selected_filters"] = {}
-    st.session_state["filtered_results"] = st.session_state.get("results", pd.DataFrame())
-    st.rerun()
-
-# ✅ Apply Filters
-if apply_filter_clicked and "results" in st.session_state:
-    processor = DataProcessor(
-        st.session_state["directory_config_path"],
-        st.session_state["job_response_path"],
-        st.session_state["rules_config_path"]
-    )
-
-    # ✅ Get file type
-    file_type = st.session_state["file_type"]
-    uploaded_file_baseline = st.session_state["uploaded_file_baseline"]
-    uploaded_file_candidate = st.session_state["uploaded_file_candidate"]
-
-    # ✅ Convert uploaded files to `BytesIO`
-    baseline_bytes = BytesIO(uploaded_file_baseline.getvalue())
-    candidate_bytes = BytesIO(uploaded_file_candidate.getvalue())
-
-    # ✅ Reset file pointer before reading (important for Streamlit uploads)
-    baseline_bytes.seek(0)
-    candidate_bytes.seek(0)
-
-    # ✅ Read files using `read_file()` from DataProcessor
-    df_baseline = processor.read_file(baseline_bytes, file_type)
-    df_candidate = processor.read_file(candidate_bytes, file_type)
-    # ✅ Apply comparison with filters
-    updated_results = processor.compare_files(
-        df_baseline, df_candidate, file_type, st.session_state.get("selected_filters", {})
-    )
-
-    # ✅ Store results in session state
-    st.session_state["results"] = updated_results
-    st.session_state["filtered_results"] = updated_results
-
-    # ✅ Refresh UI
-    st.rerun()
-
-# ✅ Display Results
-filtered_results = st.session_state.get("filtered_results", pd.DataFrame())
-if not filtered_results.empty:
-    st.header("📊 Key Performance Indicators")
-
-    # ✅ Ensure consistent capitalization in Category column
-    filtered_results["Classification"] = filtered_results["Classification"].str.upper()
-
-    # ✅ Count each unique category dynamically
-    category_counts = filtered_results["Classification"].value_counts().to_dict()
-
-
-    # ✅ Identify Missing Rows
-    missing_baseline_count = (filtered_results["Rule Type"] == "Missing in Baseline").sum()
-    missing_candidate_count = (filtered_results["Rule Type"] == "Missing in Candidate").sum()
-
-    # ✅ Total metrics to display
-    total_metrics = len(category_counts) + 3  # Dynamic categories + threshold + missing rows
-
-    # ✅ Create correct number of columns
-    kpi_columns = st.columns(min(total_metrics, 4))  # Limit to 4 columns for layout readability
-
-    # ✅ Display each category dynamically
-    i = 0
-    kpi_columns[i % len(kpi_columns)].metric("🔍 Total Discrepancies", len(filtered_results))
-    i += 1
-    for category, count in category_counts.items():
-        kpi_columns[i % len(kpi_columns)].metric(f"{category}", count)
-        i += 1
-
-    kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Baseline", missing_baseline_count)
-    i += 1
-    kpi_columns[i % len(kpi_columns)].metric("Missing Rows in Candidate", missing_candidate_count)
-
-    # ✅ Extract unique categories dynamically
-    unique_categories = filtered_results["Classification"].unique()
-    # ✅ Generate distinct colors dynamically using Plotly's color palette
-    color_palette = plotly.colors.qualitative.Set1  # Choose a color set
-    color_map = {category: color_palette[i % len(color_palette)] for i, category in enumerate(unique_categories)}
-    # ✅ Count discrepancies per column and category
-    discrepancy_counts = filtered_results.groupby(["Column Name", "Classification"]).size().reset_index(name="Count")
-    # ✅ Bar Chart: Count of Discrepancies by Column
-    st.header("📊 Discrepancy Analysis")
-    fig = px.bar(
-        discrepancy_counts,
-        x="Column Name",
-        y="Count",
-        color="Classification",
-        title="Discrepancies by Column",
-        barmode="group",
-        color_discrete_map=color_map  # ✅ Now dynamically generated
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
-    # ✅ **Pie Chart: Category Distribution**
-    st.header("Discrepancy Distribution")
-    pie_chart = px.pie(filtered_results, names="Classification", title="Proportion of Discrepancy Types", hole=0.4)
-    st.plotly_chart(pie_chart, use_container_width=True)
-
-    # ✅ **Filtered Data Table Based on Selected Column**
-    st.header("Discrepancy Details")
-    st.dataframe(filtered_results)
+if __name__ == "__main__":
+    main()
