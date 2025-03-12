@@ -1,0 +1,15 @@
+For Data file 1 ->
+  
+  messageGroup messageId  ... decimalsInContractSize decimalsInTermCurrencyQuantity
+0           10         1  ...                      0                              0
+1           10         1  ...                      0                              0
+
+[2 rows x 56 columns]
+
+For Data file 2 ->
+
+  messageGroup messageId  ... decimalsInContractSize decimalsInTermCurrencyQuantity
+0           10         1  ...                      0                              0
+1           10         1  ...                      0                              0
+
+[2 rows x 56 columns]

@@ -16,7 +16,7 @@
         groupType = 50
         optionType = 0
         optionStyle = 0
-        sector =     
+        sector = ABC
         currency = USD
         currencyUnit = 2
         currencyRelation = 100
@@ -49,7 +49,7 @@
         contractName = GALILEO FPO GAL
         tradedInGenium = true
         businessDate = 1737590400000000000
-        isinCode = AU0000007510
+        isinCode = 0000007510
         upperLevelOrderBookId = 0
         instrumentClassId = GALQ3EQ       
         derivativeLevel = 0
