@@ -1,11 +1,31 @@
 {
     "baseline": {
         "env": "PROD",
-        "label": 20250123
+        "label": 20250123,
+        "source_type": "database",
+        "database": {
+            "type": "postgresql",
+            "host": "localhost",
+            "port": 5432,
+            "database": "prod_db",
+            "username": "user",
+            "password": "password",
+            "query": "SELECT * FROM your_table"
+        }
     },
     "candidate": {
         "env": "QA",
-        "label": 20250124
+        "label": 20250124,
+        "source_type": "database",
+        "database": {
+            "type": "postgresql",
+            "host": "localhost",
+            "port": 5432,
+            "database": "qa_db",
+            "username": "user",
+            "password": "password",
+            "query": "SELECT * FROM your_table"
+        }
     },
     "report": {
         "format": "JSON"

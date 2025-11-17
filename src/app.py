@@ -16,6 +16,7 @@ import re
 from utils.ui_helpers import UIHelper
 from utils.file_handler import FileHandler
 import atexit
+from utils.database_handler import DatabaseHandler
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -79,7 +80,8 @@ required_files = {
 FILE_TYPE_MAPPING = {
     "Excel (.xlsx)": "Excel",
     "DD (.txt)": "DD",
-    "Flat Files (.txt, .csv, .json, .log)": "Text"
+    "Flat Files (.txt, .csv, .json, .log)": "Text",
+    "Database": "Database"  # Add database option
 }
 
 def extract_numeric(value):
@@ -158,10 +160,10 @@ def handle_config_upload(file_handler: FileHandler):
 
 def handle_file_type_selection():
     """Handle file type selection screen."""
-    st.title("Select File Type for Comparison")
+    st.title("Select Data Source Type for Comparison")
     
     file_type = st.radio(
-        "Choose the file type:",
+        "Choose the data source type:",
         list(FILE_TYPE_MAPPING.keys())
     )
     
@@ -172,11 +174,81 @@ def handle_file_type_selection():
 
 def handle_file_selection(file_handler: FileHandler):
     """Handle file selection and comparison screen."""
-    st.title("Upload Files for Comparison")
+    st.title("Select Data for Comparison")
     
     # Show the currently selected file type
-    st.info(f"Selected file type: {st.session_state['file_type']}")
+    st.info(f"Selected data source type: {st.session_state['file_type']}")
     
+    if st.session_state["file_type"] == "Database":
+        handle_database_comparison()
+    else:
+        handle_file_comparison(file_handler)
+
+def handle_database_comparison():
+    """Handle database comparison workflow."""
+    try:
+        # Get database configurations from job_response
+        configs = st.session_state["config_files"]["uploaded_configs"]
+        job_response = configs["job_response"]
+        
+        # Display database connection details
+        st.subheader("Database Configurations")
+        
+        # Baseline database details
+        st.write("Baseline Database:")
+        baseline_db = job_response["baseline"]["database"]
+        st.json(baseline_db)
+        
+        # Candidate database details
+        st.write("Candidate Database:")
+        candidate_db = job_response["candidate"]["database"]
+        st.json(candidate_db)
+        
+        if st.button("Run Database Comparison", key="run_db_comparison"):
+            # Initialize processor and database handler
+            processor = DataProcessor(
+                configs["directory_config"],
+                configs["job_response"],
+                configs["rules_config"]
+            )
+            
+            db_handler = DatabaseHandler()
+            
+            try:
+                # Read data from both databases
+                df_baseline = db_handler.read_data(baseline_db)
+                df_candidate = db_handler.read_data(candidate_db)
+                
+                # Run comparison
+                results = processor.compare_files(df_baseline, df_candidate, "Database")
+                
+                if results is None or results.empty:
+                    st.error("No comparison results generated. Please check your database configurations and queries.")
+                    return
+                
+                # Store results and processor in session state
+                st.session_state.update({
+                    "results": results,
+                    "filtered_results": results,
+                    "processor": processor
+                })
+                
+                st.success("✅ Database comparison completed! Discrepancy report generated.")
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error comparing databases: {str(e)}")
+                logging.error(f"Error comparing databases: {str(e)}", exc_info=True)
+            finally:
+                # Cleanup database connections
+                db_handler.cleanup()
+                
+    except Exception as e:
+        st.error(f"Error setting up database comparison: {str(e)}")
+        logging.error(f"Error setting up database comparison: {str(e)}", exc_info=True)
+
+def handle_file_comparison(file_handler: FileHandler):
+    """Handle file-based comparison workflow."""
     # Show allowed extensions based on file type
     allowed_extensions = {
         "Excel": ".xlsx, .xls",
