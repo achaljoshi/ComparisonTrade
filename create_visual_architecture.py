@@ -10,9 +10,9 @@ import matplotlib.patches as patches
 
 def create_architecture_diagram():
     """Create a visual architecture diagram."""
-    fig, ax = plt.subplots(1, 1, figsize=(14, 16))
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 16)
+    fig, ax = plt.subplots(1, 1, figsize=(16, 18))
+    ax.set_xlim(0, 12)
+    ax.set_ylim(0, 18)
     ax.axis('off')
     
     # Define colors
@@ -22,13 +22,15 @@ def create_architecture_diagram():
         'data': '#FFF9C4',    # Light yellow
         'sources': '#E1BEE7', # Lavender
         'output': '#F8BBD0',  # Light pink
+        'llm': '#FFE082',     # Light amber for LLM
         'border': '#1976D2',  # Blue border
         'text': '#212121'     # Dark text
     }
     
     # Layer 1: User Interfaces Layer
-    y_start = 14.5
-    layer1 = FancyBboxPatch((0.5, y_start), 9, 1.5, 
+    y_start = 16
+    layer_width = 9
+    layer1 = FancyBboxPatch((0.5, y_start), layer_width, 1.5, 
                            boxstyle="round,pad=0.1", 
                            edgecolor=colors['border'], 
                            facecolor=colors['ui'],
@@ -87,9 +89,52 @@ def create_architecture_diagram():
                             color='#424242', linewidth=2)
     ax.add_patch(arrow1)
     
+    # LLM Configuration Generation Layer (on the right side)
+    llm_y_start = 13.5
+    llm_layer = FancyBboxPatch((10, llm_y_start), 1.8, 2.5, 
+                              boxstyle="round,pad=0.1", 
+                              edgecolor='#F57C00', 
+                              facecolor=colors['llm'],
+                              linewidth=2)
+    ax.add_patch(llm_layer)
+    ax.text(10.9, llm_y_start + 2.2, 'LLM\nCONFIG\nGENERATION', 
+            ha='center', va='center', fontsize=11, fontweight='bold', color=colors['text'])
+    
+    # LLM Model box
+    llm_box = FancyBboxPatch((10.2, llm_y_start + 1.3), 1.4, 0.6,
+                            boxstyle="round,pad=0.05", 
+                            edgecolor='#E65100', 
+                            facecolor='white',
+                            linewidth=1.5)
+    ax.add_patch(llm_box)
+    ax.text(10.9, llm_y_start + 1.7, 'LLM Model', 
+            ha='center', va='center', fontsize=10, fontweight='bold')
+    ax.text(10.9, llm_y_start + 1.5, '(GPT/Claude)', 
+            ha='center', va='center', fontsize=8, style='italic')
+    
+    # Rules Config JSON output
+    rules_box = FancyBboxPatch((10.2, llm_y_start + 0.3), 1.4, 0.6,
+                              boxstyle="round,pad=0.05", 
+                              edgecolor='#E65100', 
+                              facecolor='white',
+                              linewidth=1.5)
+    ax.add_patch(rules_box)
+    ax.text(10.9, llm_y_start + 0.7, 'rules_config.json', 
+            ha='center', va='center', fontsize=9, fontweight='bold')
+    ax.text(10.9, llm_y_start + 0.5, 'Generated Config', 
+            ha='center', va='center', fontsize=8)
+    
+    # Arrow from LLM to Application Layer
+    arrow_llm = FancyArrowPatch((10, llm_y_start + 1.6), (9.5, llm_y_start + 1.6),
+                                arrowstyle='->', mutation_scale=15,
+                                color='#E65100', linewidth=2, linestyle='--')
+    ax.add_patch(arrow_llm)
+    ax.text(9.75, llm_y_start + 1.8, 'Generates', 
+            ha='center', va='bottom', fontsize=8, color='#E65100', style='italic')
+    
     # Layer 2: Application Layer
-    y_start = 12
-    layer2 = FancyBboxPatch((0.5, y_start), 9, 2.5, 
+    y_start = 13.5
+    layer2 = FancyBboxPatch((0.5, y_start), layer_width, 2.5, 
                            boxstyle="round,pad=0.1", 
                            edgecolor=colors['border'], 
                            facecolor=colors['app'],
@@ -167,8 +212,8 @@ def create_architecture_diagram():
     ax.add_patch(arrow2)
     
     # Layer 3: Data Access Layer
-    y_start = 9
-    layer3 = FancyBboxPatch((0.5, y_start), 9, 1.5, 
+    y_start = 10.5
+    layer3 = FancyBboxPatch((0.5, y_start), layer_width, 1.5, 
                            boxstyle="round,pad=0.1", 
                            edgecolor=colors['border'], 
                            facecolor=colors['data'],
@@ -228,8 +273,8 @@ def create_architecture_diagram():
     ax.add_patch(arrow3)
     
     # Layer 4: Data Sources
-    y_start = 7
-    layer4 = FancyBboxPatch((0.5, y_start), 9, 1.5, 
+    y_start = 8.5
+    layer4 = FancyBboxPatch((0.5, y_start), layer_width, 1.5, 
                            boxstyle="round,pad=0.1", 
                            edgecolor=colors['border'], 
                            facecolor=colors['sources'],
@@ -304,8 +349,8 @@ def create_architecture_diagram():
     ax.add_patch(arrow4)
     
     # Layer 5: Output Layer
-    y_start = 4.5
-    layer5 = FancyBboxPatch((0.5, y_start), 9, 1.5, 
+    y_start = 6.5
+    layer5 = FancyBboxPatch((0.5, y_start), layer_width, 1.5, 
                            boxstyle="round,pad=0.1", 
                            edgecolor=colors['border'], 
                            facecolor=colors['output'],
@@ -358,7 +403,8 @@ def create_architecture_diagram():
     ax.text(vis_x + output_box_width/2, y_start + 0.3, '(Plotly Charts)', 
             ha='center', va='center', fontsize=8)
     
-    plt.tight_layout()
+    # Set margins to ensure everything is visible
+    plt.subplots_adjust(left=0.05, right=0.98, top=0.98, bottom=0.02)
     return fig
 
 def main():
